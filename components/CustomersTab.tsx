@@ -33,6 +33,14 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
       .sort((a, b) => b.date.localeCompare(a.date) || b.start_time.localeCompare(a.start_time))
   }
 
+  type ReservationPeriod = 'future' | 'today' | 'past'
+
+  function getReservationPeriod(r: Reservation): ReservationPeriod {
+    if (r.date > todayIso) return 'future'
+    if (r.date === todayIso) return 'today'
+    return 'past'
+  }
+
   async function handleDelete(id: string) {
     setDeletingId(id)
     await onDeleteCustomer(id)
@@ -88,8 +96,10 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
       <div className="space-y-2">
         {filtered.map(customer => {
           const customerReservations = getCustomerReservations(customer.id)
-          const upcoming = customerReservations.filter(r => r.date >= todayIso)
+          const future = customerReservations.filter(r => r.date > todayIso)
+          const today = customerReservations.filter(r => r.date === todayIso)
           const past = customerReservations.filter(r => r.date < todayIso)
+          const upcoming = [...future, ...today]
           const noShows = customerReservations.filter(r => r.no_show).length
           const isExpanded = expandedId === customer.id
           const isConfirming = confirmDeleteId === customer.id
@@ -180,22 +190,41 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
                     <p className="text-xs text-gray-400 text-center py-2">Καμία κράτηση συνδεδεμένη.</p>
                   ) : (
                     <>
-                      {upcoming.length > 0 && (
+                      {future.length > 0 && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Επερχόμενες</p>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-black flex-shrink-0" />
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-black">Μελλοντικές</p>
+                          </div>
                           <div className="space-y-1.5">
-                            {upcoming.map(r => (
-                              <ReservationRow key={r.id} reservation={r} onToggleNoShow={onToggleNoShow} />
+                            {future.map(r => (
+                              <ReservationRow key={r.id} reservation={r} period="future" onToggleNoShow={onToggleNoShow} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {today.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-500">Σήμερα</p>
+                          </div>
+                          <div className="space-y-1.5">
+                            {today.map(r => (
+                              <ReservationRow key={r.id} reservation={r} period="today" onToggleNoShow={onToggleNoShow} />
                             ))}
                           </div>
                         </div>
                       )}
                       {past.length > 0 && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Παρελθόν</p>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Παρελθόν</p>
+                          </div>
                           <div className="space-y-1.5">
                             {past.map(r => (
-                              <ReservationRow key={r.id} reservation={r} onToggleNoShow={onToggleNoShow} />
+                              <ReservationRow key={r.id} reservation={r} period="past" onToggleNoShow={onToggleNoShow} />
                             ))}
                           </div>
                         </div>
@@ -212,8 +241,9 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
   )
 }
 
-function ReservationRow({ reservation, onToggleNoShow }: {
+function ReservationRow({ reservation, period, onToggleNoShow }: {
   reservation: Reservation
+  period: 'future' | 'today' | 'past'
   onToggleNoShow: (id: string, value: boolean) => Promise<void>
 }) {
   const [loading, setLoading] = useState(false)
@@ -225,13 +255,41 @@ function ReservationRow({ reservation, onToggleNoShow }: {
     setLoading(false)
   }
 
+  const borderColor = isNoShow
+    ? 'border-amber-200'
+    : period === 'today'
+      ? 'border-blue-200'
+      : period === 'past'
+        ? 'border-gray-100'
+        : 'border-gray-200'
+
+  const bgColor = isNoShow
+    ? 'bg-amber-50'
+    : period === 'today'
+      ? 'bg-blue-50'
+      : 'bg-white'
+
+  const dateColor = isNoShow
+    ? 'text-amber-700 line-through'
+    : period === 'today'
+      ? 'text-blue-700 font-semibold'
+      : period === 'past'
+        ? 'text-gray-400'
+        : 'text-black'
+
+  const timeColor = isNoShow
+    ? 'text-amber-400'
+    : period === 'today'
+      ? 'text-blue-400'
+      : 'text-gray-400'
+
   return (
-    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${isNoShow ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}>
+    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${bgColor} ${borderColor}`}>
       <div className="min-w-0">
-        <p className={`text-xs font-medium ${isNoShow ? 'text-amber-700 line-through' : 'text-black'}`}>
+        <p className={`text-xs ${dateColor}`}>
           {formatDate(reservation.date)}
         </p>
-        <p className={`text-[11px] mt-0.5 ${isNoShow ? 'text-amber-400' : 'text-gray-400'}`}>
+        <p className={`text-[11px] mt-0.5 ${timeColor}`}>
           {formatTime(reservation.start_time.slice(0, 5))} – {formatTime(reservation.end_time.slice(0, 5))}
         </p>
       </div>
