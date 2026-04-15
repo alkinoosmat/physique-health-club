@@ -658,22 +658,13 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
                         </div>
                       ) : (
                         cellReservations.map(r => (
-                          <div key={r.id} className="relative rounded-lg bg-black text-white group">
-                            <button
-                              onClick={() => onEditingIdChange(r.id)}
-                              className="w-full text-left px-2 pr-5 py-1.5"
-                            >
-                              <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
-                            </button>
-                            <button
-                              onClick={() => onDelete(r.id)}
-                              className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-400 p-0.5"
-                            >
-                              <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-                                <path d="M2 3.5h10M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                              </svg>
-                            </button>
-                          </div>
+                          <button
+                            key={r.id}
+                            onClick={() => onEditingIdChange(r.id)}
+                            className="w-full text-left px-2 py-1.5 rounded-lg bg-black text-white"
+                          >
+                            <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
+                          </button>
                         ))
                       )}
                     </div>
