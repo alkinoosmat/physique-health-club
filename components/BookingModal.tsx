@@ -43,14 +43,35 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
         return
       }
 
+      // Find or create customer by phone
+      const normalizedPhone = phone.trim()
+      let customerId: string | null = null
+      const { data: existingCustomers } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('phone', normalizedPhone)
+        .limit(1)
+
+      if (existingCustomers && existingCustomers.length > 0) {
+        customerId = existingCustomers[0].id
+      } else {
+        const { data: newCustomer } = await supabase
+          .from('customers')
+          .insert({ name: name.trim(), phone: normalizedPhone })
+          .select('id')
+          .single()
+        if (newCustomer) customerId = newCustomer.id
+      }
+
       const { data, error: insertError } = await supabase
         .from('reservations')
         .insert([{
           name: name.trim(),
-          phone: phone.trim(),
+          phone: normalizedPhone,
           date,
           start_time: `${slot}:00`,
           end_time: `${endTime}:00`,
+          customer_id: customerId,
         }])
         .select()
         .single()
