@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase, Reservation } from '@/lib/supabase'
 import AdminCalendar from '@/components/AdminCalendar'
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'physique2024'
+const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD 
 
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
   const [input, setInput] = useState('')
