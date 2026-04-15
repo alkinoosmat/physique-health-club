@@ -33,6 +33,16 @@ const PAYMENT_STATUS_OPTIONS: { value: Customer['payment_status']; label: string
   { value: 'overdue', label: 'Ληξιπρόθεσμο' },
 ]
 
+// Derive real-time status from next_payment_date — overrides stored payment_status
+// if the due date has passed and customer was marked paid.
+function deriveStatus(customer: Customer, todayIso: string): Customer['payment_status'] {
+  const { payment_status, next_payment_date } = customer
+  if (!payment_status) return null
+  // If they were paid but next payment date has passed → overdue
+  if (payment_status === 'paid' && next_payment_date && next_payment_date < todayIso) return 'overdue'
+  return payment_status
+}
+
 function paymentStatusStyle(status: Customer['payment_status']) {
   if (status === 'paid') return { dot: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50 border-green-200', label: 'Πληρωμένο' }
   if (status === 'overdue') return { dot: 'bg-red-500', text: 'text-red-700', bg: 'bg-red-50 border-red-200', label: 'Ληξιπρόθεσμο' }
@@ -126,7 +136,8 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
         <div className="space-y-1.5">
           {filtered.map(customer => {
             const resos = getCustomerReservations(customer.id)
-            const ps = paymentStatusStyle(customer.payment_status)
+            const effectiveStatus = deriveStatus(customer, todayIso)
+            const ps = paymentStatusStyle(effectiveStatus)
             const isSelected = selectedId === customer.id
             const isConfirming = confirmDeleteId === customer.id
             const isDeleting = deletingId === customer.id
@@ -145,8 +156,8 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate">{customer.name}</p>
-                      {customer.payment_status && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ps.dot}`} />}
-                      {customer.payment_status === 'overdue' && (
+                      {effectiveStatus && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ps.dot}`} />}
+                      {effectiveStatus === 'overdue' && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 flex-shrink-0">!</span>
                       )}
                     </div>
@@ -230,7 +241,16 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
   const noShows = reservations.filter(r => r.no_show).length
   const total = reservations.length
   const attendanceRate = total > 0 ? Math.round((attended / total) * 100) : 0
-  const ps = paymentStatusStyle(customer.payment_status)
+
+  const effectiveStatus = deriveStatus(customer, todayIso)
+  const ps = paymentStatusStyle(effectiveStatus)
+
+  // Sync overdue to DB if status changed
+  useEffect(() => {
+    if (effectiveStatus === 'overdue' && customer.payment_status !== 'overdue') {
+      onUpdateCustomer(customer.id, { payment_status: 'overdue' })
+    }
+  }, [effectiveStatus, customer.payment_status, customer.id, onUpdateCustomer])
 
   return (
     <div className="space-y-4">
@@ -243,7 +263,7 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
           <h2 className="text-xl font-black tracking-tight">{customer.name}</h2>
           <p className="text-sm text-gray-400">{customer.phone !== '-' ? customer.phone : 'Χωρίς τηλέφωνο'}</p>
         </div>
-        {customer.payment_status && (
+        {effectiveStatus && (
           <span className={`ml-auto text-xs font-semibold px-3 py-1.5 rounded-xl border ${ps.bg} ${ps.text}`}>{ps.label}</span>
         )}
       </div>
@@ -267,7 +287,7 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
       <SubscriptionSection customer={customer} onUpdateCustomer={onUpdateCustomer} />
 
       {/* Payments */}
-      <PaymentsSection customer={customer} onUpdateCustomer={onUpdateCustomer} />
+      <PaymentsSection customer={customer} todayIso={todayIso} onUpdateCustomer={onUpdateCustomer} />
 
       {/* Goals */}
       <GoalsSection customerId={customer.id} />
@@ -391,8 +411,9 @@ function SubscriptionSection({ customer, onUpdateCustomer }: {
 
 // ─── Payments Section ─────────────────────────────────────────────────────────
 
-function PaymentsSection({ customer, onUpdateCustomer }: {
+function PaymentsSection({ customer, todayIso, onUpdateCustomer }: {
   customer: Customer
+  todayIso: string
   onUpdateCustomer: (id: string, fields: Partial<Customer>) => Promise<void>
 }) {
   const [payments, setPayments] = useState<CustomerPayment[]>([])
@@ -406,12 +427,12 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
   // Payment status editing
   const [editingStatus, setEditingStatus] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
-  const [paymentStatus, setPaymentStatus] = useState<Customer['payment_status']>(customer.payment_status)
+  const [paymentStatus, setPaymentStatus] = useState<Customer['payment_status']>(deriveStatus(customer, toLocalISODate(new Date())))
   const [nextPaymentDate, setNextPaymentDate] = useState(customer.next_payment_date ?? '')
   const [reminder, setReminder] = useState(customer.payment_reminder ?? false)
 
   useEffect(() => {
-    setPaymentStatus(customer.payment_status)
+    setPaymentStatus(deriveStatus(customer, toLocalISODate(new Date())))
     setNextPaymentDate(customer.next_payment_date ?? '')
     setReminder(customer.payment_reminder ?? false)
     setNewAmount(customer.subscription_cost?.toString() ?? '')
@@ -477,7 +498,8 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
     setEditingStatus(false)
   }
 
-  const ps = paymentStatusStyle(customer.payment_status)
+  const effectiveStatus = deriveStatus(customer, todayIso)
+  const ps = paymentStatusStyle(effectiveStatus)
   const hasAutoCalc = customer.subscription && SUBSCRIPTION_DURATIONS[customer.subscription] > 0
 
   return (
@@ -496,7 +518,7 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
         {/* Status bar */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {customer.payment_status ? (
+            {effectiveStatus ? (
               <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${ps.bg} ${ps.text}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${ps.dot}`} />
                 {ps.label}
@@ -505,7 +527,7 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
               <span className="text-xs text-gray-300">Χωρίς κατάσταση</span>
             )}
             {customer.next_payment_date && (
-              <span className={`text-xs ${customer.payment_status === 'overdue' ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+              <span className={`text-xs ${effectiveStatus === 'overdue' ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
                 Επόμενη: {formatDate(customer.next_payment_date)}
               </span>
             )}
