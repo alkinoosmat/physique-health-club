@@ -37,3 +37,9 @@ create policy "Public can create reservations"
 create policy "Public can delete reservations"
   on reservations for delete
   using (true);
+
+-- Allow anyone to update reservations (admin edit)
+create policy "Public can update reservations"
+  on reservations for update
+  using (true)
+  with check (true);
