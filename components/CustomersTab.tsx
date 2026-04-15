@@ -116,24 +116,11 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold truncate">{customer.name}</p>
-                    {noShows > 0 && (
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 flex-shrink-0">
-                        {noShows} no-show
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-sm font-semibold truncate">{customer.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-xs text-gray-400">{customer.phone !== '-' ? customer.phone : 'Χωρίς τηλέφωνο'}</p>
                     <span className="text-gray-200">·</span>
                     <p className="text-xs text-gray-400">{customerReservations.length} κρατήσεις</p>
-                    {upcoming.length > 0 && (
-                      <>
-                        <span className="text-gray-200">·</span>
-                        <p className="text-xs text-black font-medium">{upcoming.length} επερχόμενες</p>
-                      </>
-                    )}
                   </div>
                 </div>
 
