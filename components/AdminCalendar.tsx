@@ -167,6 +167,8 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   onEditingIdChange: (id: string | null) => void
 }) {
   const [bookingSlot, setBookingSlot] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
 
   const bySlot = new Map<string, Reservation[]>()
   for (const r of reservations) {
@@ -176,6 +178,25 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   }
 
   const totalBookings = reservations.length
+
+  function handleDrop(targetSlot: string) {
+    setDragOverSlot(null)
+    if (!draggingId) return
+    const reservation = reservations.find(r => r.id === draggingId)
+    if (!reservation) return
+    const currentSlot = reservation.start_time.slice(0, 5)
+    if (currentSlot === targetSlot) return
+    const [h] = targetSlot.split(':').map(Number)
+    const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
+    onEdit(draggingId, {
+      name: reservation.name,
+      phone: reservation.phone,
+      date: reservation.date,
+      start_time: targetSlot,
+      end_time: endTime,
+    })
+    setDraggingId(null)
+  }
 
   return (
     <div>
@@ -191,18 +212,29 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
         {TIME_SLOTS.map((slot) => {
           const slotReservations = bySlot.get(slot) || []
           const count = slotReservations.length
-          const isFull = count >= MAX_PER_SLOT
+          // when dragging, don't count the dragged card against capacity
+          const draggingReservation = draggingId ? reservations.find(r => r.id === draggingId) : null
+          const draggingFromThisSlot = draggingReservation?.start_time.slice(0, 5) === slot
+          const effectiveCount = draggingFromThisSlot ? count - 1 : count
+          const isFull = effectiveCount >= MAX_PER_SLOT
           const isBooking = bookingSlot === slot
+          const isDragOver = dragOverSlot === slot && !isFull
 
           return (
-            <div key={slot} className="flex gap-3 items-start">
+            <div
+              key={slot}
+              className="flex gap-3 items-start"
+              onDragOver={e => { e.preventDefault(); if (!isFull) setDragOverSlot(slot) }}
+              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverSlot(null) }}
+              onDrop={() => handleDrop(slot)}
+            >
               {/* Time label */}
               <div className="w-12 flex-shrink-0 text-xs font-medium text-gray-400 pt-3.5 text-right tabular-nums">
                 {formatTime(slot)}
               </div>
 
               {/* Slot content */}
-              <div className="flex-1 min-w-0">
+              <div className={`flex-1 min-w-0 rounded-xl transition-colors ${isDragOver ? 'bg-gray-50 ring-2 ring-black ring-offset-1' : ''}`}>
                 {isBooking ? (
                   <AdminBookingForm
                     slot={slot}
@@ -223,11 +255,21 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                         isEditing={editingId === r.id}
                         onStartEdit={() => onEditingIdChange(r.id)}
                         onStopEdit={() => onEditingIdChange(null)}
+                        isDragging={draggingId === r.id}
+                        onDragStart={() => setDraggingId(r.id)}
+                        onDragEnd={() => { setDraggingId(null); setDragOverSlot(null) }}
                       />
                     ))}
 
-                    {/* Add button — shown when not full */}
-                    {!isFull && (
+                    {/* Drop hint when dragging over empty slot */}
+                    {isDragOver && count === 0 && (
+                      <div className="h-11 rounded-xl border-2 border-dashed border-black flex items-center justify-center">
+                        <span className="text-xs font-medium text-black">{formatTime(slot)}</span>
+                      </div>
+                    )}
+
+                    {/* Add button — shown when not full and not dragging */}
+                    {!isFull && !draggingId && (
                       <button
                         onClick={() => setBookingSlot(slot)}
                         className="w-full h-10 rounded-xl border border-dashed border-gray-200 flex items-center gap-2 px-3 text-xs text-gray-300 hover:border-black hover:text-black transition-all group"
@@ -333,13 +375,16 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   )
 }
 
-function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit }: {
+function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit, isDragging, onDragStart, onDragEnd }: {
   reservation: Reservation
   onDelete: (id: string) => void
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
   isEditing: boolean
   onStartEdit: () => void
   onStopEdit: () => void
+  isDragging: boolean
+  onDragStart: () => void
+  onDragEnd: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -358,7 +403,12 @@ function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartE
   }
 
   return (
-    <div className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all ${confirming ? 'border-red-500' : 'border-gray-900'}`}>
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all cursor-grab active:cursor-grabbing select-none ${confirming ? 'border-red-500' : 'border-gray-900'} ${isDragging ? 'opacity-40' : 'opacity-100'}`}
+    >
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
         <span className="text-sm font-medium truncate">{reservation.name}</span>
