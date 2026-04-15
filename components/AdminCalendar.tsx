@@ -660,13 +660,13 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
                           ) : (
                             <div
                               key={r.id}
-                              className="rounded-lg bg-black text-white px-2 py-1 flex items-center justify-between gap-1 group"
+                              className="relative rounded-lg bg-black text-white px-2 py-1.5 group"
                             >
-                              <span className="text-[11px] font-medium truncate">{r.name}</span>
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
+                              <div className="absolute inset-0 rounded-lg flex items-center justify-end gap-0.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/80">
                                 <button
                                   onClick={() => onEditingIdChange(r.id)}
-                                  className="text-gray-500 hover:text-white transition-colors p-0.5"
+                                  className="text-gray-400 hover:text-white transition-colors p-0.5"
                                 >
                                   <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
                                     <path d="M9.5 2.5l2 2M2 10l.5 1.5L4 11l7-7-2-2-7 7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -674,7 +674,7 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
                                 </button>
                                 <button
                                   onClick={() => onDelete(r.id)}
-                                  className="text-gray-500 hover:text-red-400 transition-colors p-0.5"
+                                  className="text-gray-400 hover:text-red-400 transition-colors p-0.5"
                                 >
                                   <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
                                     <path d="M2 3.5h10M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
