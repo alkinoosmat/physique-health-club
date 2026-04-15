@@ -6,23 +6,34 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase, Reservation } from '@/lib/supabase'
 import AdminCalendar from '@/components/AdminCalendar'
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD 
-
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState(false)
   const [shake, setShake] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (input === ADMIN_PASSWORD) {
-      sessionStorage.setItem('admin_unlocked', '1')
-      onUnlock()
-    } else {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: input }),
+      })
+      if (res.ok) {
+        sessionStorage.setItem('admin_unlocked', '1')
+        onUnlock()
+      } else {
+        setError(true)
+        setShake(true)
+        setInput('')
+        setTimeout(() => setShake(false), 500)
+      }
+    } catch {
       setError(true)
-      setShake(true)
-      setInput('')
-      setTimeout(() => setShake(false), 500)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -56,9 +67,10 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
           )}
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all"
+            disabled={loading}
+            className="w-full py-3 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
           >
-            Είσοδος
+            {loading ? 'Έλεγχος...' : 'Είσοδος'}
           </button>
         </form>
       </div>
