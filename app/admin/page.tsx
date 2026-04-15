@@ -123,6 +123,19 @@ export default function AdminPage() {
     }
   }
 
+  async function handleEdit(id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) {
+    const { data, error: updateError } = await supabase
+      .from('reservations')
+      .update(fields)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (!updateError && data) {
+      setReservations(prev => prev.map(r => r.id === id ? data : r))
+    }
+  }
+
   async function handleBook(date: string, slot: string, name: string, phone: string) {
     const [startHour] = slot.split(':').map(Number)
     const endHour = startHour + 1
@@ -237,7 +250,7 @@ export default function AdminPage() {
             ))}
           </div>
         ) : (
-          <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} />
+          <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} onEdit={handleEdit} />
         )}
       </div>
     </main>
