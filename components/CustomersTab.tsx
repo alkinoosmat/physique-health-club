@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { supabase, Customer, CustomerGoal, Reservation } from '@/lib/supabase'
+import { supabase, Customer, CustomerGoal, CustomerPayment, Reservation } from '@/lib/supabase'
 import { formatDate, formatTime, toLocalISODate } from '@/lib/utils'
 
 interface CustomersTabProps {
@@ -15,10 +15,17 @@ interface CustomersTabProps {
 const SUBSCRIPTION_OPTIONS = [
   { value: '', label: 'Χωρίς συνδρομή' },
   { value: 'monthly', label: 'Μηνιαία' },
-  { value: 'per_session', label: 'Ανά session' },
   { value: 'quarterly', label: 'Τριμηνιαία' },
   { value: 'annual', label: 'Ετήσια' },
+  { value: 'per_session', label: 'Ανά session' },
 ]
+
+const SUBSCRIPTION_DURATIONS: Record<string, number> = {
+  monthly: 30,
+  quarterly: 90,
+  annual: 365,
+  per_session: 0,
+}
 
 const PAYMENT_STATUS_OPTIONS: { value: Customer['payment_status']; label: string }[] = [
   { value: 'paid', label: 'Πληρωμένο' },
@@ -32,6 +39,17 @@ function paymentStatusStyle(status: Customer['payment_status']) {
   if (status === 'unpaid') return { dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', label: 'Απλήρωτο' }
   return { dot: 'bg-gray-300', text: 'text-gray-400', bg: 'bg-gray-50 border-gray-200', label: '—' }
 }
+
+function calcNextPaymentDate(startDate: string, subscription: string): string {
+  const days = SUBSCRIPTION_DURATIONS[subscription]
+  if (!days || !startDate) return ''
+  const [y, m, d] = startDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + days)
+  return toLocalISODate(date)
+}
+
+// ─── Main Tab ─────────────────────────────────────────────────────────────────
 
 export default function CustomersTab({ customers, reservations, onDeleteCustomer, onToggleNoShow, onUpdateCustomer }: CustomersTabProps) {
   const [search, setSearch] = useState('')
@@ -82,7 +100,6 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
     <div className="flex gap-4 min-h-[600px]">
       {/* ── Left: Customer List ── */}
       <div className={`flex flex-col gap-3 ${selectedCustomer ? 'hidden lg:flex lg:w-72 xl:w-80 flex-shrink-0' : 'flex-1'}`}>
-        {/* Search */}
         <div className="relative">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300">
             <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -115,27 +132,20 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
             const isDeleting = deletingId === customer.id
 
             return (
-              <div
-                key={customer.id}
-                className={`rounded-2xl border transition-all overflow-hidden ${isSelected ? 'border-black' : 'border-gray-200 hover:border-gray-300'}`}
-              >
+              <div key={customer.id} className={`rounded-2xl border transition-all overflow-hidden ${isSelected ? 'border-black' : 'border-gray-200 hover:border-gray-300'}`}>
                 <button
                   onClick={() => setSelectedId(isSelected ? null : customer.id)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left"
                 >
-                  {/* Avatar */}
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-black' : 'bg-gray-100'}`}>
                     <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
                       {customer.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate">{customer.name}</p>
-                      {customer.payment_status && (
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ps.dot}`} />
-                      )}
+                      {customer.payment_status && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ps.dot}`} />}
                       {customer.payment_status === 'overdue' && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 flex-shrink-0">!</span>
                       )}
@@ -147,8 +157,6 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
                     </div>
                   </div>
                 </button>
-
-                {/* Delete actions (inline, below the button) */}
                 {isSelected && (
                   <div className="px-4 pb-2 flex items-center justify-end gap-1">
                     {isConfirming ? (
@@ -174,20 +182,15 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
         </div>
       </div>
 
-      {/* ── Right: Customer Detail Panel ── */}
+      {/* ── Right: Detail Panel ── */}
       {selectedCustomer ? (
         <div className="flex-1 min-w-0">
-          {/* Mobile back button */}
-          <button
-            onClick={() => setSelectedId(null)}
-            className="lg:hidden flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-4 transition-colors"
-          >
+          <button onClick={() => setSelectedId(null)} className="lg:hidden flex items-center gap-2 text-sm text-gray-500 hover:text-black mb-4 transition-colors">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M9 2L5 7l4 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             Πίσω στη λίστα
           </button>
-
           <CustomerDetail
             customer={selectedCustomer}
             reservations={getCustomerReservations(selectedCustomer.id)}
@@ -211,7 +214,7 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
   )
 }
 
-// ─── Customer Detail Panel ────────────────────────────────────────────────────
+// ─── Customer Detail ──────────────────────────────────────────────────────────
 
 function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUpdateCustomer }: {
   customer: Customer
@@ -227,8 +230,6 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
   const noShows = reservations.filter(r => r.no_show).length
   const total = reservations.length
   const attendanceRate = total > 0 ? Math.round((attended / total) * 100) : 0
-  const noShowRate = total > 0 ? Math.round((noShows / total) * 100) : 0
-
   const ps = paymentStatusStyle(customer.payment_status)
 
   return (
@@ -243,13 +244,11 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
           <p className="text-sm text-gray-400">{customer.phone !== '-' ? customer.phone : 'Χωρίς τηλέφωνο'}</p>
         </div>
         {customer.payment_status && (
-          <span className={`ml-auto text-xs font-semibold px-3 py-1.5 rounded-xl border ${ps.bg} ${ps.text}`}>
-            {ps.label}
-          </span>
+          <span className={`ml-auto text-xs font-semibold px-3 py-1.5 rounded-xl border ${ps.bg} ${ps.text}`}>{ps.label}</span>
         )}
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div className="grid grid-cols-4 gap-2">
         {[
           { label: 'Σύνολο', value: total },
@@ -263,6 +262,9 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
           </div>
         ))}
       </div>
+
+      {/* Subscription */}
+      <SubscriptionSection customer={customer} onUpdateCustomer={onUpdateCustomer} />
 
       {/* Payments */}
       <PaymentsSection customer={customer} onUpdateCustomer={onUpdateCustomer} />
@@ -280,15 +282,9 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
             <p className="text-xs text-gray-400 text-center py-4">Καμία κράτηση συνδεδεμένη.</p>
           ) : (
             <>
-              {future.length > 0 && (
-                <ReservationGroup label="Μελλοντικές" dotColor="bg-black" labelColor="text-black" reservations={future} period="future" onToggleNoShow={onToggleNoShow} />
-              )}
-              {today.length > 0 && (
-                <ReservationGroup label="Σήμερα" dotColor="bg-blue-500" labelColor="text-blue-500" reservations={today} period="today" onToggleNoShow={onToggleNoShow} />
-              )}
-              {past.length > 0 && (
-                <ReservationGroup label="Παρελθόν" dotColor="bg-gray-300" labelColor="text-gray-400" reservations={past} period="past" onToggleNoShow={onToggleNoShow} />
-              )}
+              {future.length > 0 && <ReservationGroup label="Μελλοντικές" dotColor="bg-black" labelColor="text-black" reservations={future} period="future" onToggleNoShow={onToggleNoShow} />}
+              {today.length > 0 && <ReservationGroup label="Σήμερα" dotColor="bg-blue-500" labelColor="text-blue-500" reservations={today} period="today" onToggleNoShow={onToggleNoShow} />}
+              {past.length > 0 && <ReservationGroup label="Παρελθόν" dotColor="bg-gray-300" labelColor="text-gray-400" reservations={past} period="past" onToggleNoShow={onToggleNoShow} />}
             </>
           )}
         </div>
@@ -297,101 +293,48 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
   )
 }
 
-// ─── Payments Section ─────────────────────────────────────────────────────────
+// ─── Subscription Section ─────────────────────────────────────────────────────
 
-// How many days each subscription type adds to the start date
-const SUBSCRIPTION_DURATIONS: Record<string, number> = {
-  monthly: 30,
-  quarterly: 90,
-  annual: 365,
-  per_session: 0, // no auto-calculation for per-session
-}
-
-function calcNextPaymentDate(startDate: string, subscription: string): string {
-  const days = SUBSCRIPTION_DURATIONS[subscription]
-  if (!days || !startDate) return ''
-  const [y, m, d] = startDate.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  date.setDate(date.getDate() + days)
-  return toLocalISODate(date)
-}
-
-function PaymentsSection({ customer, onUpdateCustomer }: {
+function SubscriptionSection({ customer, onUpdateCustomer }: {
   customer: Customer
   onUpdateCustomer: (id: string, fields: Partial<Customer>) => Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [subscription, setSubscription] = useState(customer.subscription ?? '')
-  const [paymentStatus, setPaymentStatus] = useState<Customer['payment_status']>(customer.payment_status)
-  const [startDate, setStartDate] = useState(customer.last_payment_date ?? '')
-  const [nextPayment, setNextPayment] = useState(customer.next_payment_date ?? '')
-  const [reminder, setReminder] = useState(customer.payment_reminder ?? false)
+  const [cost, setCost] = useState(customer.subscription_cost?.toString() ?? '')
 
-  // Sync if customer prop changes (e.g. after markAsPaid)
   useEffect(() => {
     setSubscription(customer.subscription ?? '')
-    setPaymentStatus(customer.payment_status)
-    setStartDate(customer.last_payment_date ?? '')
-    setNextPayment(customer.next_payment_date ?? '')
-    setReminder(customer.payment_reminder ?? false)
+    setCost(customer.subscription_cost?.toString() ?? '')
   }, [customer])
-
-  // Auto-calculate next payment when subscription or start date changes
-  useEffect(() => {
-    if (subscription && startDate) {
-      const calculated = calcNextPaymentDate(startDate, subscription)
-      if (calculated) setNextPayment(calculated)
-    }
-  }, [subscription, startDate])
 
   async function handleSave() {
     setSaving(true)
     await onUpdateCustomer(customer.id, {
       subscription: subscription || null,
-      payment_status: paymentStatus,
-      last_payment_date: startDate || null,
-      next_payment_date: nextPayment || null,
-      payment_reminder: reminder,
+      subscription_cost: cost ? parseFloat(cost) : null,
     })
     setSaving(false)
     setEditing(false)
   }
 
-  async function markAsPaid() {
-    const today = toLocalISODate(new Date())
-    const newNext = subscription ? calcNextPaymentDate(today, subscription) : customer.next_payment_date ?? null
-    setSaving(true)
-    await onUpdateCustomer(customer.id, {
-      payment_status: 'paid',
-      last_payment_date: today,
-      next_payment_date: newNext || null,
-    })
-    setSaving(false)
-  }
-
-  const ps = paymentStatusStyle(customer.payment_status)
   const subLabel = SUBSCRIPTION_OPTIONS.find(o => o.value === (customer.subscription ?? ''))?.label ?? '—'
-  const hasAutoCalc = subscription && SUBSCRIPTION_DURATIONS[subscription] > 0
 
   return (
     <div className="rounded-2xl border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-        <p className="text-sm font-bold">Πληρωμές</p>
-        <button
-          onClick={() => setEditing(e => !e)}
-          className="text-xs text-gray-400 hover:text-black transition-colors font-medium"
-        >
+        <p className="text-sm font-bold">Συνδρομή</p>
+        <button onClick={() => setEditing(e => !e)} className="text-xs text-gray-400 hover:text-black transition-colors font-medium">
           {editing ? 'Άκυρο' : 'Επεξεργασία'}
         </button>
       </div>
-
-      <div className="px-4 py-3 space-y-3">
+      <div className="px-4 py-3">
         {editing ? (
-          <>
+          <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">Συνδρομή</label>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">Τύπος συνδρομής</label>
                 <select
                   value={subscription}
                   onChange={e => setSubscription(e.target.value)}
@@ -400,6 +343,185 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
                   {SUBSCRIPTION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">Κόστος (€)</label>
+                <input
+                  type="number"
+                  value={cost}
+                  onChange={e => setCost(e.target.value)}
+                  placeholder="π.χ. 50"
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+                />
+              </div>
+            </div>
+            {subscription && SUBSCRIPTION_DURATIONS[subscription] > 0 && (
+              <p className="text-[11px] text-gray-400">
+                Διάρκεια: <span className="font-semibold text-black">{SUBSCRIPTION_DURATIONS[subscription]} μέρες</span>
+              </p>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
+            >
+              {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] text-gray-400 font-medium mb-0.5">Τύπος</p>
+              <p className="text-sm font-semibold">{subLabel}</p>
+              {customer.subscription && SUBSCRIPTION_DURATIONS[customer.subscription] > 0 && (
+                <p className="text-[11px] text-gray-400 mt-0.5">{SUBSCRIPTION_DURATIONS[customer.subscription]} μέρες</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400 font-medium mb-0.5">Κόστος</p>
+              <p className="text-sm font-semibold">{customer.subscription_cost != null ? `${customer.subscription_cost}€` : '—'}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Payments Section ─────────────────────────────────────────────────────────
+
+function PaymentsSection({ customer, onUpdateCustomer }: {
+  customer: Customer
+  onUpdateCustomer: (id: string, fields: Partial<Customer>) => Promise<void>
+}) {
+  const [payments, setPayments] = useState<CustomerPayment[]>([])
+  const [loadingPayments, setLoadingPayments] = useState(true)
+  const [addingPayment, setAddingPayment] = useState(false)
+  const [newAmount, setNewAmount] = useState(customer.subscription_cost?.toString() ?? '')
+  const [newDate, setNewDate] = useState(toLocalISODate(new Date()))
+  const [newNotes, setNewNotes] = useState('')
+  const [savingPayment, setSavingPayment] = useState(false)
+
+  // Payment status editing
+  const [editingStatus, setEditingStatus] = useState(false)
+  const [savingStatus, setSavingStatus] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<Customer['payment_status']>(customer.payment_status)
+  const [nextPaymentDate, setNextPaymentDate] = useState(customer.next_payment_date ?? '')
+  const [reminder, setReminder] = useState(customer.payment_reminder ?? false)
+
+  useEffect(() => {
+    setPaymentStatus(customer.payment_status)
+    setNextPaymentDate(customer.next_payment_date ?? '')
+    setReminder(customer.payment_reminder ?? false)
+    setNewAmount(customer.subscription_cost?.toString() ?? '')
+  }, [customer])
+
+  useEffect(() => {
+    setLoadingPayments(true)
+    supabase
+      .from('customer_payments')
+      .select('*')
+      .eq('customer_id', customer.id)
+      .order('paid_at', { ascending: false })
+      .then(({ data }) => {
+        setPayments((data as CustomerPayment[]) || [])
+        setLoadingPayments(false)
+      })
+  }, [customer.id])
+
+  // Auto-calculate next payment date when adding
+  function calcNext(fromDate: string): string {
+    if (!customer.subscription) return ''
+    return calcNextPaymentDate(fromDate, customer.subscription)
+  }
+
+  async function handleAddPayment() {
+    if (!newAmount || !newDate) return
+    setSavingPayment(true)
+    const amount = parseFloat(newAmount)
+    const { data } = await supabase
+      .from('customer_payments')
+      .insert({ customer_id: customer.id, amount, paid_at: newDate, notes: newNotes.trim() || null })
+      .select()
+      .single()
+
+    if (data) {
+      setPayments(prev => [data as CustomerPayment, ...prev])
+      // Auto-update customer status to paid + calculate next payment
+      const nextDate = calcNext(newDate)
+      await onUpdateCustomer(customer.id, {
+        payment_status: 'paid',
+        next_payment_date: nextDate || null,
+      })
+    }
+    setNewDate(toLocalISODate(new Date()))
+    setNewNotes('')
+    setAddingPayment(false)
+    setSavingPayment(false)
+  }
+
+  async function handleDeletePayment(id: string) {
+    await supabase.from('customer_payments').delete().eq('id', id)
+    setPayments(prev => prev.filter(p => p.id !== id))
+  }
+
+  async function handleSaveStatus() {
+    setSavingStatus(true)
+    await onUpdateCustomer(customer.id, {
+      payment_status: paymentStatus,
+      next_payment_date: nextPaymentDate || null,
+      payment_reminder: reminder,
+    })
+    setSavingStatus(false)
+    setEditingStatus(false)
+  }
+
+  const ps = paymentStatusStyle(customer.payment_status)
+  const hasAutoCalc = customer.subscription && SUBSCRIPTION_DURATIONS[customer.subscription] > 0
+
+  return (
+    <div className="rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <p className="text-sm font-bold">Πληρωμές</p>
+        <button
+          onClick={() => setAddingPayment(a => !a)}
+          className="text-xs text-gray-400 hover:text-black transition-colors font-medium"
+        >
+          {addingPayment ? 'Άκυρο' : '+ Καταχώρηση'}
+        </button>
+      </div>
+
+      <div className="px-4 py-3 space-y-3">
+        {/* Status bar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {customer.payment_status ? (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${ps.bg} ${ps.text}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${ps.dot}`} />
+                {ps.label}
+              </span>
+            ) : (
+              <span className="text-xs text-gray-300">Χωρίς κατάσταση</span>
+            )}
+            {customer.next_payment_date && (
+              <span className={`text-xs ${customer.payment_status === 'overdue' ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                Επόμενη: {formatDate(customer.next_payment_date)}
+              </span>
+            )}
+            {customer.payment_reminder && (
+              <span className="text-[10px] text-amber-600 font-medium">🔔</span>
+            )}
+          </div>
+          <button onClick={() => setEditingStatus(e => !e)} className="text-xs text-gray-400 hover:text-black transition-colors">
+            {editingStatus ? 'Άκυρο' : 'Επεξεργασία'}
+          </button>
+        </div>
+
+        {/* Status editing */}
+        {editingStatus && (
+          <div className="space-y-2 p-3 rounded-xl border border-gray-200 bg-gray-50">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[11px] font-medium text-gray-400 mb-1">Κατάσταση</label>
                 <select
@@ -413,94 +535,102 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-gray-400 mb-1">
-                  Ημ/νία έναρξης / πληρωμής
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">
                   Επόμενη πληρωμή
                   {hasAutoCalc && <span className="ml-1 text-black font-semibold">· αυτόματα</span>}
                 </label>
                 <input
                   type="date"
-                  value={nextPayment}
-                  onChange={e => setNextPayment(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-black transition-colors ${hasAutoCalc ? 'border-black bg-gray-50' : 'border-gray-200'}`}
+                  value={nextPaymentDate}
+                  onChange={e => setNextPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors"
                 />
-                {hasAutoCalc && startDate && (
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    Υπολογίστηκε από {startDate} + {SUBSCRIPTION_DURATIONS[subscription]} μέρες
-                  </p>
-                )}
               </div>
             </div>
             <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={reminder}
-                onChange={e => setReminder(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 accent-black"
-              />
-              <span className="text-xs text-gray-600">Ενεργοποίηση υπενθύμισης πληρωμής</span>
+              <input type="checkbox" checked={reminder} onChange={e => setReminder(e.target.checked)} className="w-4 h-4 rounded border-gray-300 accent-black" />
+              <span className="text-xs text-gray-600">Υπενθύμιση πληρωμής</span>
             </label>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
-            >
-              {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
+            <button onClick={handleSaveStatus} disabled={savingStatus} className="w-full py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50">
+              {savingStatus ? 'Αποθήκευση…' : 'Αποθήκευση'}
             </button>
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
+          </div>
+        )}
+
+        {/* Add payment form */}
+        {addingPayment && (
+          <div className="space-y-2 p-3 rounded-xl border border-dashed border-gray-300 bg-gray-50">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[11px] text-gray-400 font-medium mb-0.5">Συνδρομή</p>
-                <p className="text-sm font-semibold">{subLabel}</p>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">Ποσό (€)</label>
+                <input
+                  autoFocus
+                  type="number"
+                  value={newAmount}
+                  onChange={e => setNewAmount(e.target.value)}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+                />
               </div>
               <div>
-                <p className="text-[11px] text-gray-400 font-medium mb-0.5">Κατάσταση</p>
-                {customer.payment_status ? (
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-lg border ${ps.bg} ${ps.text}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${ps.dot}`} />
-                    {ps.label}
-                  </span>
-                ) : (
-                  <p className="text-sm text-gray-300">—</p>
-                )}
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 font-medium mb-0.5">Τελευταία πληρωμή</p>
-                <p className="text-sm">{customer.last_payment_date ? formatDate(customer.last_payment_date) : '—'}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 font-medium mb-0.5">Επόμενη πληρωμή</p>
-                <p className={`text-sm ${customer.payment_status === 'overdue' ? 'text-red-600 font-semibold' : ''}`}>
-                  {customer.next_payment_date ? formatDate(customer.next_payment_date) : '—'}
-                </p>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">Ημ/νία πληρωμής</label>
+                <input
+                  type="date"
+                  value={newDate}
+                  onChange={e => setNewDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors"
+                />
               </div>
             </div>
-            {customer.payment_reminder && (
-              <p className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
-                <span>🔔</span> Υπενθύμιση πληρωμής ενεργή
+            {hasAutoCalc && newDate && (
+              <p className="text-[11px] text-gray-400">
+                Επόμενη αυτόματα: <span className="font-semibold text-black">{formatDate(calcNext(newDate))}</span>
               </p>
             )}
-            {customer.payment_status !== 'paid' && (
-              <button
-                onClick={markAsPaid}
-                disabled={saving}
-                className="w-full py-2 rounded-xl border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50 transition-all disabled:opacity-50"
-              >
-                {saving ? '…' : '✓ Σήμανση ως Πληρωμένο'}
-              </button>
-            )}
-          </>
+            <input
+              type="text"
+              value={newNotes}
+              onChange={e => setNewNotes(e.target.value)}
+              placeholder="Σημειώσεις (προαιρετικό)"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+            />
+            <button
+              onClick={handleAddPayment}
+              disabled={savingPayment || !newAmount || !newDate}
+              className="w-full py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-40"
+            >
+              {savingPayment ? 'Καταχώρηση…' : 'Καταχώρηση Πληρωμής'}
+            </button>
+          </div>
+        )}
+
+        {/* Payment history */}
+        {loadingPayments ? (
+          <div className="h-8 rounded-xl bg-gray-100 animate-pulse" />
+        ) : payments.length === 0 ? (
+          <p className="text-xs text-gray-300 text-center py-3">Δεν υπάρχουν καταχωρημένες πληρωμές.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {payments.map(p => (
+              <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-3 py-2">
+                <div>
+                  <p className="text-sm font-semibold text-green-700">{p.amount}€</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {formatDate(p.paid_at)}{p.notes ? ` · ${p.notes}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDeletePayment(p.id)}
+                  className="text-gray-300 hover:text-red-400 transition-colors p-1 flex-shrink-0"
+                >
+                  <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -563,14 +693,10 @@ function GoalsSection({ customerId }: { customerId: string }) {
     <div className="rounded-2xl border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
         <p className="text-sm font-bold">Στόχοι</p>
-        <button
-          onClick={() => setAdding(a => !a)}
-          className="text-xs text-gray-400 hover:text-black transition-colors font-medium"
-        >
+        <button onClick={() => setAdding(a => !a)} className="text-xs text-gray-400 hover:text-black transition-colors font-medium">
           {adding ? 'Άκυρο' : '+ Νέος στόχος'}
         </button>
       </div>
-
       <div className="px-4 py-3 space-y-3">
         {adding && (
           <div className="space-y-2 p-3 rounded-xl border border-dashed border-gray-300 bg-gray-50">
@@ -599,7 +725,6 @@ function GoalsSection({ customerId }: { customerId: string }) {
             </button>
           </div>
         )}
-
         {loading ? (
           <div className="h-8 rounded-xl bg-gray-100 animate-pulse" />
         ) : goals.length === 0 ? (

@@ -17,11 +17,22 @@ export type Customer = {
   name: string
   phone: string
   created_at: string
-  subscription: string | null
+  // Subscription
+  subscription: string | null        // plan label e.g. "monthly"
+  subscription_cost: number | null   // e.g. 50 (euros)
+  // Payment tracking
   payment_status: 'paid' | 'unpaid' | 'overdue' | null
-  last_payment_date: string | null
   next_payment_date: string | null
   payment_reminder: boolean
+}
+
+export type CustomerPayment = {
+  id: string
+  customer_id: string
+  amount: number
+  paid_at: string   // ISO date
+  notes: string | null
+  created_at: string
 }
 
 export type CustomerGoal = {
