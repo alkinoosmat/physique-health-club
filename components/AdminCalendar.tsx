@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Reservation } from '@/lib/supabase'
 import { TIME_SLOTS, formatTime, toLocalISODate, formatDate } from '@/lib/utils'
 
@@ -169,33 +169,128 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   const [bookingSlot, setBookingSlot] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
-  // Always-fresh refs for use inside touch handlers (avoids stale closures)
+  // Keep always-fresh refs so native touch handlers never go stale
   const reservationsRef = useRef(reservations)
   reservationsRef.current = reservations
   const onEditRef = useRef(onEdit)
   onEditRef.current = onEdit
+  const setDraggingIdRef = useRef(setDraggingId)
+  setDraggingIdRef.current = setDraggingId
 
-  const commitMoveRef = useRef((_id: string, _slot: string) => {})
-  commitMoveRef.current = (id: string, targetSlot: string) => {
-    const reservation = reservationsRef.current.find(r => r.id === id)
-    if (!reservation) return
-    if (reservation.start_time.slice(0, 5) === targetSlot) return
-    const [h] = targetSlot.split(':').map(Number)
-    const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-    onEditRef.current(id, {
-      name: reservation.name,
-      phone: reservation.phone,
-      date: reservation.date,
-      start_time: targetSlot,
-      end_time: endTime,
-    })
-  }
+  // ── Native touch drag (attached via useEffect so passive:false works) ──────
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
 
-  // Touch drag state
-  const ghostRef = useRef<HTMLDivElement | null>(null)
-  const touchDraggingId = useRef<string | null>(null)
-  const touchDragOverSlot = useRef<string | null>(null)
+    let ghost: HTMLDivElement | null = null
+    let activeDragId: string | null = null
+    let activeDragName: string | null = null
+    let activeOverSlot: string | null = null
+
+    function highlightSlot(slot: string | null) {
+      if (activeOverSlot === slot) return
+      if (activeOverSlot) {
+        container!.querySelector(`[data-slot="${activeOverSlot}"] [data-drop-target]`)
+          ?.classList.remove('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
+      }
+      if (slot) {
+        container!.querySelector(`[data-slot="${slot}"] [data-drop-target]`)
+          ?.classList.add('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
+      }
+      activeOverSlot = slot
+    }
+
+    function onTouchStart(e: TouchEvent) {
+      const card = (e.target as HTMLElement).closest('[data-reservation-id]')
+      if (!card) return
+
+      const id = card.getAttribute('data-reservation-id')!
+      const name = card.getAttribute('data-reservation-name') || ''
+
+      activeDragId = id
+      activeDragName = name
+      setDraggingIdRef.current(id)
+
+      const touch = e.touches[0]
+      ghost = document.createElement('div')
+      ghost.style.cssText = `
+        position:fixed;left:${touch.clientX - 80}px;top:${touch.clientY - 22}px;
+        width:160px;padding:8px 12px;background:#000;color:#fff;border-radius:10px;
+        font-size:13px;font-weight:500;pointer-events:none;z-index:9999;opacity:0.9;
+        box-shadow:0 8px 24px rgba(0,0,0,0.3);white-space:nowrap;overflow:hidden;
+        text-overflow:ellipsis;
+      `
+      ghost.textContent = activeDragName
+      document.body.appendChild(ghost)
+
+      e.preventDefault() // must be called in non-passive listener
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      if (!activeDragId || !ghost) return
+      e.preventDefault()
+
+      const touch = e.touches[0]
+      ghost.style.left = `${touch.clientX - 80}px`
+      ghost.style.top = `${touch.clientY - 22}px`
+
+      ghost.style.display = 'none'
+      const el = document.elementFromPoint(touch.clientX, touch.clientY)
+      ghost.style.display = ''
+
+      const dropZone = el?.closest('[data-slot]')
+      const slot = dropZone?.getAttribute('data-slot') ?? null
+      highlightSlot(slot)
+    }
+
+    function onTouchEnd() {
+      if (!activeDragId) return
+
+      ghost?.remove()
+      ghost = null
+
+      // Capture before highlightSlot clears activeOverSlot
+      const finalSlot = activeOverSlot
+      const id = activeDragId
+
+      highlightSlot(null)
+      activeDragId = null
+      activeDragName = null
+      activeOverSlot = null
+
+      setDraggingIdRef.current(null)
+
+      if (finalSlot && id) {
+        const reservation = reservationsRef.current.find(r => r.id === id)
+        if (reservation && reservation.start_time.slice(0, 5) !== finalSlot) {
+          const [h] = finalSlot.split(':').map(Number)
+          const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
+          onEditRef.current(id, {
+            name: reservation.name,
+            phone: reservation.phone,
+            date: reservation.date,
+            start_time: finalSlot,
+            end_time: endTime,
+          })
+        }
+      }
+    }
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false })
+    container.addEventListener('touchmove', onTouchMove, { passive: false })
+    container.addEventListener('touchend', onTouchEnd)
+    container.addEventListener('touchcancel', onTouchEnd)
+
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart)
+      container.removeEventListener('touchmove', onTouchMove)
+      container.removeEventListener('touchend', onTouchEnd)
+      container.removeEventListener('touchcancel', onTouchEnd)
+      ghost?.remove()
+    }
+  }, []) // empty — all live data accessed via refs
 
   const bySlot = new Map<string, Reservation[]>()
   for (const r of reservations) {
@@ -210,108 +305,23 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   function handleDrop(targetSlot: string) {
     setDragOverSlot(null)
     if (!draggingId) return
-    commitMoveRef.current(draggingId, targetSlot)
+    const reservation = reservationsRef.current.find(r => r.id === draggingId)
+    if (reservation && reservation.start_time.slice(0, 5) !== targetSlot) {
+      const [h] = targetSlot.split(':').map(Number)
+      const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
+      onEditRef.current(draggingId, {
+        name: reservation.name,
+        phone: reservation.phone,
+        date: reservation.date,
+        start_time: targetSlot,
+        end_time: endTime,
+      })
+    }
     setDraggingId(null)
   }
 
-  // ── Touch drag handlers ───────────────────────────────────────────────────
-  const handleTouchStart = useCallback((e: React.TouchEvent, id: string, name: string) => {
-    // don't interfere with scrolling on short taps — wait for some movement
-    touchDraggingId.current = id
-
-    const touch = e.touches[0]
-
-    // Create ghost
-    const ghost = document.createElement('div')
-    ghost.style.cssText = `
-      position: fixed;
-      left: ${touch.clientX - 80}px;
-      top: ${touch.clientY - 20}px;
-      width: 160px;
-      padding: 8px 12px;
-      background: #000;
-      color: #fff;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 500;
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.9;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    `
-    ghost.textContent = name
-    document.body.appendChild(ghost)
-    ghostRef.current = ghost
-  }, [])
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchDraggingId.current || !ghostRef.current) return
-    e.preventDefault() // prevent page scroll while dragging
-
-    const touch = e.touches[0]
-
-    // Move ghost
-    ghostRef.current.style.left = `${touch.clientX - 80}px`
-    ghostRef.current.style.top = `${touch.clientY - 20}px`
-
-    // Hide ghost temporarily to detect element underneath
-    ghostRef.current.style.display = 'none'
-    const el = document.elementFromPoint(touch.clientX, touch.clientY)
-    ghostRef.current.style.display = ''
-
-    // Find slot drop zone by walking up the DOM
-    const dropZone = el?.closest('[data-slot]')
-    const slot = dropZone?.getAttribute('data-slot') ?? null
-
-    if (slot !== touchDragOverSlot.current) {
-      // Clear previous highlight
-      if (touchDragOverSlot.current) {
-        document.querySelector(`[data-slot="${touchDragOverSlot.current}"] [data-drop-target]`)
-          ?.classList.remove('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
-      }
-      // Apply new highlight
-      if (slot) {
-        document.querySelector(`[data-slot="${slot}"] [data-drop-target]`)
-          ?.classList.add('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
-      }
-      touchDragOverSlot.current = slot
-    }
-  }, [])
-
-  const handleTouchEnd = useCallback(() => {
-    if (!touchDraggingId.current) return
-
-    // Remove ghost
-    if (ghostRef.current) {
-      ghostRef.current.remove()
-      ghostRef.current = null
-    }
-
-    // Clear highlight
-    if (touchDragOverSlot.current) {
-      document.querySelector(`[data-slot="${touchDragOverSlot.current}"] [data-drop-target]`)
-        ?.classList.remove('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
-    }
-
-    const targetSlot = touchDragOverSlot.current
-    const id = touchDraggingId.current
-
-    touchDraggingId.current = null
-    touchDragOverSlot.current = null
-
-    setDraggingId(null)
-    setDragOverSlot(null)
-
-    if (targetSlot && id) {
-      commitMoveRef.current(id, targetSlot)
-    }
-  }, [])
-
   return (
-    <div>
+    <div ref={containerRef}>
       {/* Day summary */}
       <div className="flex items-center justify-between mb-3 px-1">
         <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
@@ -345,7 +355,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                 {formatTime(slot)}
               </div>
 
-              {/* Slot content — data-drop-target used by touch handler */}
+              {/* Slot content */}
               <div data-drop-target className={`flex-1 min-w-0 rounded-xl transition-colors ${isDragOver ? 'bg-gray-50 ring-2 ring-black ring-offset-1' : ''}`}>
                 {isBooking ? (
                   <AdminBookingForm
@@ -370,9 +380,6 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                         isDragging={draggingId === r.id}
                         onDragStart={() => setDraggingId(r.id)}
                         onDragEnd={() => { setDraggingId(null); setDragOverSlot(null) }}
-                        onTouchStart={(e) => { setDraggingId(r.id); handleTouchStart(e, r.id, r.name) }}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={() => { handleTouchEnd() }}
                       />
                     ))}
 
@@ -490,7 +497,7 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   )
 }
 
-function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit, isDragging, onDragStart, onDragEnd, onTouchStart, onTouchMove, onTouchEnd }: {
+function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit, isDragging, onDragStart, onDragEnd }: {
   reservation: Reservation
   onDelete: (id: string) => void
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
@@ -500,9 +507,6 @@ function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartE
   isDragging: boolean
   onDragStart: () => void
   onDragEnd: () => void
-  onTouchStart: (e: React.TouchEvent) => void
-  onTouchMove: (e: React.TouchEvent) => void
-  onTouchEnd: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -525,9 +529,8 @@ function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartE
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+      data-reservation-id={reservation.id}
+      data-reservation-name={reservation.name}
       className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all cursor-grab active:cursor-grabbing select-none touch-none ${confirming ? 'border-red-500' : 'border-gray-900'} ${isDragging ? 'opacity-40' : 'opacity-100'}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
