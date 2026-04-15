@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase, Reservation } from '@/lib/supabase'
 import AdminCalendar from '@/components/AdminCalendar'
+import { toLocalISODate } from '@/lib/utils'
 
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
   const [input, setInput] = useState('')
@@ -122,21 +123,9 @@ export default function AdminPage() {
     }
   }
 
-  const totalToday = reservations.filter(r => {
-    const today = new Date()
-    const y = today.getFullYear()
-    const m = (today.getMonth() + 1).toString().padStart(2, '0')
-    const d = today.getDate().toString().padStart(2, '0')
-    return r.date === `${y}-${m}-${d}`
-  }).length
-
-  const totalUpcoming = reservations.filter(r => {
-    const today = new Date()
-    const y = today.getFullYear()
-    const m = (today.getMonth() + 1).toString().padStart(2, '0')
-    const d = today.getDate().toString().padStart(2, '0')
-    return r.date >= `${y}-${m}-${d}`
-  }).length
+  const todayIso = toLocalISODate(new Date())
+  const totalToday = reservations.filter(r => r.date === todayIso).length
+  const totalUpcoming = reservations.filter(r => r.date > todayIso).length
 
   if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />
 
@@ -199,7 +188,7 @@ export default function AdminPage() {
           </div>
           <div className="px-5 py-4 rounded-xl border border-gray-200">
             <div className="text-3xl font-black">{totalUpcoming}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Προσεχείς</div>
+            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Από Αύριο</div>
           </div>
           <div className="px-5 py-4 rounded-xl border border-gray-200 col-span-2 sm:col-span-1">
             <div className="text-3xl font-black">{reservations.length}</div>

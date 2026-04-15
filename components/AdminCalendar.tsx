@@ -58,7 +58,7 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
   const todayIso = toLocalISODate(today)
 
   const periodLabel = viewMode === 'day'
-    ? currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    ? currentDate.toLocaleDateString('el-GR', { weekday: 'long', month: 'long', day: 'numeric' })
     : `${weekStart.toLocaleDateString('el-GR', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('el-GR', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   return (
