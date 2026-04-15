@@ -11,9 +11,10 @@ interface AdminCalendarProps {
   onDelete: (id: string) => void
   onBook: (date: string, slot: string, name: string, phone: string) => Promise<void>
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
+  onToggleNoShow: (id: string, value: boolean) => Promise<void>
 }
 
-export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }: AdminCalendarProps) {
+export default function AdminCalendar({ reservations, onDelete, onBook, onEdit, onToggleNoShow }: AdminCalendarProps) {
   const today = new Date()
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const [currentDate, setCurrentDate] = useState(today)
@@ -165,6 +166,7 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
           onDelete={onDelete}
           onBook={(slot, name, phone) => onBook(currentIso, slot, name, phone)}
           onEdit={onEdit}
+          onToggleNoShow={onToggleNoShow}
           editingId={editingId}
           onEditingIdChange={setEditingId}
         />
@@ -177,6 +179,7 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
           todayIso={todayIso}
           getReservationsForDate={getReservationsForDate}
           onDelete={onDelete}
+          onToggleNoShow={onToggleNoShow}
           onSelectDay={(d) => { setCurrentDate(d); setViewMode('day') }}
           onEditingIdChange={setEditingId}
         />
@@ -187,12 +190,13 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
 
 // ─── Day View ────────────────────────────────────────────────────────────────
 
-function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, onEditingIdChange }: {
+function DayView({ dateIso, reservations, onDelete, onBook, onEdit, onToggleNoShow, editingId, onEditingIdChange }: {
   dateIso: string
   reservations: Reservation[]
   onDelete: (id: string) => void
   onBook: (slot: string, name: string, phone: string) => Promise<void>
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
+  onToggleNoShow: (id: string, value: boolean) => Promise<void>
   editingId: string | null
   onEditingIdChange: (id: string | null) => void
 }) {
@@ -250,6 +254,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                         reservation={r}
                         onDelete={onDelete}
                         onStartEdit={() => onEditingIdChange(r.id)}
+                        onToggleNoShow={onToggleNoShow}
                       />
                     ))}
 
@@ -360,13 +365,22 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   )
 }
 
-function DayReservationCard({ reservation, onDelete, onStartEdit }: {
+function DayReservationCard({ reservation, onDelete, onStartEdit, onToggleNoShow }: {
   reservation: Reservation
   onDelete: (id: string) => void
   onStartEdit: () => void
+  onToggleNoShow: (id: string, value: boolean) => Promise<void>
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [togglingNoShow, setTogglingNoShow] = useState(false)
+  const isNoShow = reservation.no_show ?? false
+
+  async function handleNoShow() {
+    setTogglingNoShow(true)
+    await onToggleNoShow(reservation.id, !isNoShow)
+    setTogglingNoShow(false)
+  }
 
   if (confirming) {
     return (
@@ -392,24 +406,42 @@ function DayReservationCard({ reservation, onDelete, onStartEdit }: {
   }
 
   return (
-    <div className="relative rounded-xl border border-gray-900 bg-black text-white group">
+    <div className={`relative rounded-xl border group transition-all ${isNoShow ? 'bg-amber-950 border-amber-800' : 'bg-black border-gray-900'}`}>
       <button
         onClick={onStartEdit}
-        className="w-full text-left px-3 py-2.5 flex items-center gap-2.5 min-w-0"
+        className="w-full text-left px-3 py-2.5 flex items-center gap-2.5 min-w-0 pr-20"
       >
-        <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
-        <span className="text-sm font-medium truncate">{reservation.name}</span>
-        <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">{reservation.phone !== '-' ? reservation.phone : ''}</span>
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isNoShow ? 'bg-amber-400' : 'bg-white'}`} />
+        <span className={`text-sm font-medium truncate ${isNoShow ? 'text-amber-200 line-through' : 'text-white'}`}>{reservation.name}</span>
+        <span className={`text-xs flex-shrink-0 hidden sm:block ${isNoShow ? 'text-amber-600' : 'text-gray-400'}`}>{reservation.phone !== '-' ? reservation.phone : ''}</span>
       </button>
-      <button
-        onClick={() => setConfirming(true)}
-        className="absolute top-1/2 -translate-y-1/2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-400 p-1"
-        aria-label="Delete booking"
-      >
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-          <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M5.5 6v4M8.5 6v4M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
+      <div className="absolute top-1/2 -translate-y-1/2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={handleNoShow}
+          disabled={togglingNoShow}
+          className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all disabled:opacity-50 ${
+            isNoShow
+              ? 'bg-amber-400/20 border-amber-600 text-amber-400 hover:bg-amber-400/30'
+              : 'bg-white/10 border-gray-600 text-gray-400 hover:border-amber-500 hover:text-amber-400'
+          }`}
+        >
+          {togglingNoShow ? '…' : 'No-show'}
+        </button>
+        <button
+          onClick={() => setConfirming(true)}
+          className="text-gray-500 hover:text-red-400 transition-colors p-1"
+          aria-label="Delete booking"
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M5.5 6v4M8.5 6v4M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      {isNoShow && (
+        <span className="absolute top-1/2 -translate-y-1/2 right-3 text-[10px] font-bold text-amber-500 group-hover:opacity-0 transition-opacity">
+          No-show
+        </span>
+      )}
     </div>
   )
 }
@@ -533,11 +565,12 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
 
 // ─── Week View ───────────────────────────────────────────────────────────────
 
-function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSelectDay, onEditingIdChange }: {
+function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onToggleNoShow, onSelectDay, onEditingIdChange }: {
   weekDays: Date[]
   todayIso: string
   getReservationsForDate: (iso: string) => Reservation[]
   onDelete: (id: string) => void
+  onToggleNoShow: (id: string, value: boolean) => Promise<void>
   onSelectDay: (d: Date) => void
   onEditingIdChange: (id: string | null) => void
 }) {
@@ -586,7 +619,7 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
               {totalBookings > 0 && (
                 <div className="px-4 py-3 space-y-1.5">
                   {dayReservations.map(r => (
-                    <MobileWeekCard key={r.id} reservation={r} onDelete={onDelete} onStartEdit={() => onEditingIdChange(r.id)} />
+                    <MobileWeekCard key={r.id} reservation={r} onDelete={onDelete} onStartEdit={() => onEditingIdChange(r.id)} onToggleNoShow={onToggleNoShow} />
                   ))}
                 </div>
               )}
@@ -658,13 +691,12 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
                         </div>
                       ) : (
                         cellReservations.map(r => (
-                          <button
+                          <DesktopWeekCell
                             key={r.id}
-                            onClick={() => onEditingIdChange(r.id)}
-                            className="w-full text-left px-2 py-1.5 rounded-lg bg-black text-white"
-                          >
-                            <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
-                          </button>
+                            reservation={r}
+                            onStartEdit={() => onEditingIdChange(r.id)}
+                            onToggleNoShow={onToggleNoShow}
+                          />
                         ))
                       )}
                     </div>
@@ -679,18 +711,65 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
   )
 }
 
-function MobileWeekCard({ reservation, onDelete, onStartEdit }: {
+function DesktopWeekCell({ reservation, onStartEdit, onToggleNoShow }: {
+  reservation: Reservation
+  onStartEdit: () => void
+  onToggleNoShow: (id: string, value: boolean) => Promise<void>
+}) {
+  const [togglingNoShow, setTogglingNoShow] = useState(false)
+  const isNoShow = reservation.no_show ?? false
+
+  async function handleNoShow(e: React.MouseEvent) {
+    e.stopPropagation()
+    setTogglingNoShow(true)
+    await onToggleNoShow(reservation.id, !isNoShow)
+    setTogglingNoShow(false)
+  }
+
+  return (
+    <div className={`relative rounded-lg text-white group transition-all ${isNoShow ? 'bg-amber-950' : 'bg-black'}`}>
+      <button onClick={onStartEdit} className="w-full text-left px-2 py-1.5">
+        <span className={`text-[11px] font-medium block w-full truncate ${isNoShow ? 'line-through text-amber-300' : ''}`}>
+          {reservation.name}
+        </span>
+      </button>
+      <button
+        onClick={handleNoShow}
+        disabled={togglingNoShow}
+        className={`absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-bold px-1 py-0.5 rounded disabled:opacity-50 ${
+          isNoShow ? 'text-amber-400 hover:text-amber-300' : 'text-gray-500 hover:text-amber-400'
+        }`}
+        title="No-show"
+      >
+        {togglingNoShow ? '…' : '✕'}
+      </button>
+    </div>
+  )
+}
+
+function MobileWeekCard({ reservation, onDelete, onStartEdit, onToggleNoShow }: {
   reservation: Reservation
   onDelete: (id: string) => void
   onStartEdit: () => void
+  onToggleNoShow: (id: string, value: boolean) => Promise<void>
 }) {
   const [confirming, setConfirming] = useState(false)
+  const [togglingNoShow, setTogglingNoShow] = useState(false)
+  const isNoShow = reservation.no_show ?? false
+
+  async function handleNoShow() {
+    setTogglingNoShow(true)
+    await onToggleNoShow(reservation.id, !isNoShow)
+    setTogglingNoShow(false)
+  }
 
   return (
-    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${confirming ? 'bg-red-50 border-red-200' : 'bg-black border-gray-900'}`}>
+    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${
+      confirming ? 'bg-red-50 border-red-200' : isNoShow ? 'bg-amber-950 border-amber-800' : 'bg-black border-gray-900'
+    }`}>
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`text-xs font-medium truncate ${confirming ? 'text-red-700' : 'text-white'}`}>{reservation.name}</span>
-        <span className={`text-xs flex-shrink-0 ${confirming ? 'text-red-400' : 'text-gray-400'}`}>
+        <span className={`text-xs font-medium truncate ${confirming ? 'text-red-700' : isNoShow ? 'text-amber-200 line-through' : 'text-white'}`}>{reservation.name}</span>
+        <span className={`text-xs flex-shrink-0 ${confirming ? 'text-red-400' : isNoShow ? 'text-amber-600' : 'text-gray-400'}`}>
           {formatTime(reservation.start_time.slice(0, 5))}
         </span>
       </div>
@@ -701,6 +780,17 @@ function MobileWeekCard({ reservation, onDelete, onStartEdit }: {
         </div>
       ) : (
         <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
+          <button
+            onClick={handleNoShow}
+            disabled={togglingNoShow}
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border transition-all disabled:opacity-50 ${
+              isNoShow
+                ? 'border-amber-600 text-amber-400'
+                : 'border-gray-700 text-gray-500 hover:border-amber-600 hover:text-amber-400'
+            }`}
+          >
+            {togglingNoShow ? '…' : 'NS'}
+          </button>
           <button onClick={onStartEdit} className="text-gray-500 hover:text-white transition-colors p-1">
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
               <path d="M9.5 2.5l2 2M2 10l.5 1.5L4 11l7-7-2-2-7 7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>

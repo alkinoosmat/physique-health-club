@@ -326,7 +326,7 @@ export default function AdminPage() {
             ))}
           </div>
         ) : activeTab === 'calendar' ? (
-          <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} onEdit={handleEdit} />
+          <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} onEdit={handleEdit} onToggleNoShow={handleToggleNoShow} />
         ) : (
           <CustomersTab
             customers={customers}
