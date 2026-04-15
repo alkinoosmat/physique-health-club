@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Reservation } from '@/lib/supabase'
 import { TIME_SLOTS, formatTime, toLocalISODate, formatDate } from '@/lib/utils'
 
@@ -170,6 +170,11 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
 
+  // Touch drag state
+  const ghostRef = useRef<HTMLDivElement | null>(null)
+  const touchDraggingId = useRef<string | null>(null)
+  const touchDragOverSlot = useRef<string | null>(null)
+
   const bySlot = new Map<string, Reservation[]>()
   for (const r of reservations) {
     const slot = r.start_time.slice(0, 5)
@@ -179,24 +184,125 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
 
   const totalBookings = reservations.length
 
+  // ── Desktop drop handler ──────────────────────────────────────────────────
   function handleDrop(targetSlot: string) {
     setDragOverSlot(null)
     if (!draggingId) return
-    const reservation = reservations.find(r => r.id === draggingId)
+    commitMove(draggingId, targetSlot)
+    setDraggingId(null)
+  }
+
+  function commitMove(id: string, targetSlot: string) {
+    const reservation = reservations.find(r => r.id === id)
     if (!reservation) return
-    const currentSlot = reservation.start_time.slice(0, 5)
-    if (currentSlot === targetSlot) return
+    if (reservation.start_time.slice(0, 5) === targetSlot) return
     const [h] = targetSlot.split(':').map(Number)
     const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-    onEdit(draggingId, {
+    onEdit(id, {
       name: reservation.name,
       phone: reservation.phone,
       date: reservation.date,
       start_time: targetSlot,
       end_time: endTime,
     })
-    setDraggingId(null)
   }
+
+  // ── Touch drag handlers ───────────────────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent, id: string, name: string) => {
+    // don't interfere with scrolling on short taps — wait for some movement
+    touchDraggingId.current = id
+
+    const touch = e.touches[0]
+
+    // Create ghost
+    const ghost = document.createElement('div')
+    ghost.style.cssText = `
+      position: fixed;
+      left: ${touch.clientX - 80}px;
+      top: ${touch.clientY - 20}px;
+      width: 160px;
+      padding: 8px 12px;
+      background: #000;
+      color: #fff;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.9;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    `
+    ghost.textContent = name
+    document.body.appendChild(ghost)
+    ghostRef.current = ghost
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchDraggingId.current || !ghostRef.current) return
+    e.preventDefault() // prevent page scroll while dragging
+
+    const touch = e.touches[0]
+
+    // Move ghost
+    ghostRef.current.style.left = `${touch.clientX - 80}px`
+    ghostRef.current.style.top = `${touch.clientY - 20}px`
+
+    // Hide ghost temporarily to detect element underneath
+    ghostRef.current.style.display = 'none'
+    const el = document.elementFromPoint(touch.clientX, touch.clientY)
+    ghostRef.current.style.display = ''
+
+    // Find slot drop zone by walking up the DOM
+    const dropZone = el?.closest('[data-slot]')
+    const slot = dropZone?.getAttribute('data-slot') ?? null
+
+    if (slot !== touchDragOverSlot.current) {
+      // Clear previous highlight
+      if (touchDragOverSlot.current) {
+        document.querySelector(`[data-slot="${touchDragOverSlot.current}"] [data-drop-target]`)
+          ?.classList.remove('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
+      }
+      // Apply new highlight
+      if (slot) {
+        document.querySelector(`[data-slot="${slot}"] [data-drop-target]`)
+          ?.classList.add('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
+      }
+      touchDragOverSlot.current = slot
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchDraggingId.current) return
+
+    // Remove ghost
+    if (ghostRef.current) {
+      ghostRef.current.remove()
+      ghostRef.current = null
+    }
+
+    // Clear highlight
+    if (touchDragOverSlot.current) {
+      document.querySelector(`[data-slot="${touchDragOverSlot.current}"] [data-drop-target]`)
+        ?.classList.remove('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
+    }
+
+    const targetSlot = touchDragOverSlot.current
+    const id = touchDraggingId.current
+
+    touchDraggingId.current = null
+    touchDragOverSlot.current = null
+
+    setDraggingId(null)
+    setDragOverSlot(null)
+
+    if (targetSlot && id) {
+      commitMove(id, targetSlot)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservations, onEdit])
 
   return (
     <div>
@@ -212,7 +318,6 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
         {TIME_SLOTS.map((slot) => {
           const slotReservations = bySlot.get(slot) || []
           const count = slotReservations.length
-          // when dragging, don't count the dragged card against capacity
           const draggingReservation = draggingId ? reservations.find(r => r.id === draggingId) : null
           const draggingFromThisSlot = draggingReservation?.start_time.slice(0, 5) === slot
           const effectiveCount = draggingFromThisSlot ? count - 1 : count
@@ -223,6 +328,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
           return (
             <div
               key={slot}
+              data-slot={slot}
               className="flex gap-3 items-start"
               onDragOver={e => { e.preventDefault(); if (!isFull) setDragOverSlot(slot) }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverSlot(null) }}
@@ -233,8 +339,8 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                 {formatTime(slot)}
               </div>
 
-              {/* Slot content */}
-              <div className={`flex-1 min-w-0 rounded-xl transition-colors ${isDragOver ? 'bg-gray-50 ring-2 ring-black ring-offset-1' : ''}`}>
+              {/* Slot content — data-drop-target used by touch handler */}
+              <div data-drop-target className={`flex-1 min-w-0 rounded-xl transition-colors ${isDragOver ? 'bg-gray-50 ring-2 ring-black ring-offset-1' : ''}`}>
                 {isBooking ? (
                   <AdminBookingForm
                     slot={slot}
@@ -258,6 +364,9 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                         isDragging={draggingId === r.id}
                         onDragStart={() => setDraggingId(r.id)}
                         onDragEnd={() => { setDraggingId(null); setDragOverSlot(null) }}
+                        onTouchStart={(e) => { setDraggingId(r.id); handleTouchStart(e, r.id, r.name) }}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={() => { handleTouchEnd() }}
                       />
                     ))}
 
@@ -375,7 +484,7 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   )
 }
 
-function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit, isDragging, onDragStart, onDragEnd }: {
+function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit, isDragging, onDragStart, onDragEnd, onTouchStart, onTouchMove, onTouchEnd }: {
   reservation: Reservation
   onDelete: (id: string) => void
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
@@ -385,6 +494,9 @@ function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartE
   isDragging: boolean
   onDragStart: () => void
   onDragEnd: () => void
+  onTouchStart: (e: React.TouchEvent) => void
+  onTouchMove: (e: React.TouchEvent) => void
+  onTouchEnd: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -407,7 +519,10 @@ function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartE
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all cursor-grab active:cursor-grabbing select-none ${confirming ? 'border-red-500' : 'border-gray-900'} ${isDragging ? 'opacity-40' : 'opacity-100'}`}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all cursor-grab active:cursor-grabbing select-none touch-none ${confirming ? 'border-red-500' : 'border-gray-900'} ${isDragging ? 'opacity-40' : 'opacity-100'}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
