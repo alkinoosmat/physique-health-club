@@ -189,6 +189,13 @@ export default function AdminPage() {
     }
   }
 
+  async function handleUpdateCustomer(id: string, fields: Partial<Customer>) {
+    const { error } = await supabase.from('customers').update(fields).eq('id', id)
+    if (!error) {
+      setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...fields } : c))
+    }
+  }
+
   async function handleToggleNoShow(reservationId: string, value: boolean) {
     const { error: updateError } = await supabase
       .from('reservations')
@@ -333,6 +340,7 @@ export default function AdminPage() {
             reservations={reservations}
             onDeleteCustomer={handleDeleteCustomer}
             onToggleNoShow={handleToggleNoShow}
+            onUpdateCustomer={handleUpdateCustomer}
           />
         )}
       </div>

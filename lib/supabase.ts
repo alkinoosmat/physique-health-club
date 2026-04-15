@@ -17,6 +17,20 @@ export type Customer = {
   name: string
   phone: string
   created_at: string
+  subscription: string | null
+  payment_status: 'paid' | 'unpaid' | 'overdue' | null
+  last_payment_date: string | null
+  next_payment_date: string | null
+  payment_reminder: boolean
+}
+
+export type CustomerGoal = {
+  id: string
+  customer_id: string
+  title: string
+  status: 'active' | 'completed'
+  notes: string | null
+  created_at: string
 }
 
 let _supabase: SupabaseClient | null = null
