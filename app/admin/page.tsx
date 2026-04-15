@@ -123,6 +123,28 @@ export default function AdminPage() {
     }
   }
 
+  async function handleBook(date: string, slot: string, name: string, phone: string) {
+    const [startHour] = slot.split(':').map(Number)
+    const endHour = startHour + 1
+    const endTime = `${endHour.toString().padStart(2, '0')}:00`
+
+    const { data, error: insertError } = await supabase
+      .from('reservations')
+      .insert({
+        name,
+        phone: phone || '-',
+        date,
+        start_time: slot,
+        end_time: endTime,
+      })
+      .select()
+      .single()
+
+    if (!insertError && data) {
+      setReservations(prev => [...prev, data])
+    }
+  }
+
   const todayIso = toLocalISODate(new Date())
   const totalToday = reservations.filter(r => r.date === todayIso).length
   const totalUpcoming = reservations.filter(r => r.date > todayIso).length
@@ -215,7 +237,7 @@ export default function AdminPage() {
             ))}
           </div>
         ) : (
-          <AdminCalendar reservations={reservations} onDelete={handleDelete} />
+          <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} />
         )}
       </div>
     </main>

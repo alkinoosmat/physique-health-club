@@ -9,9 +9,10 @@ const MAX_PER_SLOT = 7
 interface AdminCalendarProps {
   reservations: Reservation[]
   onDelete: (id: string) => void
+  onBook: (date: string, slot: string, name: string, phone: string) => Promise<void>
 }
 
-export default function AdminCalendar({ reservations, onDelete }: AdminCalendarProps) {
+export default function AdminCalendar({ reservations, onDelete, onBook }: AdminCalendarProps) {
   const today = new Date()
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const [currentDate, setCurrentDate] = useState(today)
@@ -124,6 +125,7 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
           dateIso={currentIso}
           reservations={getReservationsForDate(currentIso)}
           onDelete={onDelete}
+          onBook={(slot, name, phone) => onBook(currentIso, slot, name, phone)}
         />
       )}
 
@@ -143,12 +145,14 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
 
 // ─── Day View ────────────────────────────────────────────────────────────────
 
-function DayView({ dateIso, reservations, onDelete }: {
+function DayView({ dateIso, reservations, onDelete, onBook }: {
   dateIso: string
   reservations: Reservation[]
   onDelete: (id: string) => void
+  onBook: (slot: string, name: string, phone: string) => Promise<void>
 }) {
-  // Group by slot — multiple bookings per slot
+  const [bookingSlot, setBookingSlot] = useState<string | null>(null)
+
   const bySlot = new Map<string, Reservation[]>()
   for (const r of reservations) {
     const slot = r.start_time.slice(0, 5)
@@ -173,6 +177,7 @@ function DayView({ dateIso, reservations, onDelete }: {
           const slotReservations = bySlot.get(slot) || []
           const count = slotReservations.length
           const isFull = count >= MAX_PER_SLOT
+          const isBooking = bookingSlot === slot
 
           return (
             <div key={slot} className="flex gap-3 items-start">
@@ -183,27 +188,48 @@ function DayView({ dateIso, reservations, onDelete }: {
 
               {/* Slot content */}
               <div className="flex-1 min-w-0">
-                {count === 0 ? (
-                  <div className="h-11 rounded-xl border border-dashed border-gray-100 flex items-center px-3">
-                    <span className="text-xs text-gray-200">—</span>
-                  </div>
+                {isBooking ? (
+                  <AdminBookingForm
+                    slot={slot}
+                    onConfirm={async (name, phone) => {
+                      await onBook(slot, name, phone)
+                      setBookingSlot(null)
+                    }}
+                    onCancel={() => setBookingSlot(null)}
+                  />
                 ) : (
                   <div className="space-y-1.5">
                     {slotReservations.map(r => (
                       <DayReservationCard key={r.id} reservation={r} onDelete={onDelete} />
                     ))}
-                    {/* Capacity indicator */}
-                    <div className="flex items-center gap-2 px-1">
-                      <div className="flex-1 h-0.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${isFull ? 'bg-black' : count >= 5 ? 'bg-amber-400' : 'bg-gray-300'}`}
-                          style={{ width: `${(count / MAX_PER_SLOT) * 100}%` }}
-                        />
+
+                    {/* Add button — shown when not full */}
+                    {!isFull && (
+                      <button
+                        onClick={() => setBookingSlot(slot)}
+                        className="w-full h-10 rounded-xl border border-dashed border-gray-200 flex items-center gap-2 px-3 text-xs text-gray-300 hover:border-black hover:text-black transition-all group"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-shrink-0">
+                          <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        {count === 0 ? 'Προσθήκη κράτησης' : 'Άλλη κράτηση'}
+                      </button>
+                    )}
+
+                    {/* Capacity bar — shown when there are bookings */}
+                    {count > 0 && (
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="flex-1 h-0.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${isFull ? 'bg-black' : count >= 5 ? 'bg-amber-400' : 'bg-gray-300'}`}
+                            style={{ width: `${(count / MAX_PER_SLOT) * 100}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs tabular-nums flex-shrink-0 ${isFull ? 'text-black font-semibold' : 'text-gray-400'}`}>
+                          {count}/{MAX_PER_SLOT}
+                        </span>
                       </div>
-                      <span className={`text-xs tabular-nums flex-shrink-0 ${isFull ? 'text-black font-semibold' : 'text-gray-400'}`}>
-                        {count}/{MAX_PER_SLOT}
-                      </span>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -212,6 +238,75 @@ function DayView({ dateIso, reservations, onDelete }: {
         })}
       </div>
     </div>
+  )
+}
+
+function AdminBookingForm({ slot, onConfirm, onCancel }: {
+  slot: string
+  onConfirm: (name: string, phone: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) { setError('Συμπλήρωσε όνομα.'); return }
+    setLoading(true)
+    setError('')
+    try {
+      await onConfirm(name.trim(), phone.trim() || '-')
+    } catch {
+      setError('Σφάλμα. Δοκίμασε ξανά.')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-xl border border-black bg-white p-3 space-y-2 animate-scale-in">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="w-1.5 h-1.5 rounded-full bg-black flex-shrink-0" />
+        <span className="text-xs font-semibold">{formatTime(slot)}</span>
+        <span className="text-xs text-gray-400">— Νέα κράτηση</span>
+      </div>
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          type="text"
+          value={name}
+          onChange={e => { setName(e.target.value); setError('') }}
+          placeholder="Όνομα πελάτη"
+          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+          required
+        />
+        <input
+          type="tel"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="Τηλέφωνο"
+          className="w-28 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+        />
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-black transition-all"
+        >
+          Άκυρο
+        </button>
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
+        >
+          {loading ? 'Αποθήκευση...' : 'Αποθήκευση'}
+        </button>
+      </div>
+    </form>
   )
 }
 
