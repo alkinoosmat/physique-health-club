@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase, Reservation, Customer } from '@/lib/supabase'
 import AdminCalendar from '@/components/AdminCalendar'
 import CustomersTab from '@/components/CustomersTab'
+import ClosedPeriodsTab from '@/components/ClosedPeriodsTab'
 import { toLocalISODate } from '@/lib/utils'
 
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
@@ -86,7 +87,7 @@ export default function AdminPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'calendar' | 'customers'>('calendar')
+  const [activeTab, setActiveTab] = useState<'calendar' | 'customers' | 'closedperiods'>('calendar')
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_unlocked') === '1') {
@@ -137,11 +138,21 @@ export default function AdminPage() {
     }
   }
 
-  async function handleBook(date: string, slot: string, name: string, phone: string) {
+  async function handleBook(date: string, slot: string, name: string, phone: string): Promise<string | null> {
     const [startHour] = slot.split(':').map(Number)
     const endHour = startHour + 1
     const endTime = `${endHour.toString().padStart(2, '0')}:00`
     const normalizedPhone = phone.trim() || '-'
+
+    // Check for duplicate: same phone, same date, same slot
+    if (normalizedPhone !== '-') {
+      const isDuplicate = reservations.some(r =>
+        r.date === date &&
+        r.start_time.slice(0, 5) === slot &&
+        r.phone === normalizedPhone
+      )
+      if (isDuplicate) return 'Υπάρχει ήδη κράτηση για αυτόν τον πελάτη σε αυτή την ώρα.'
+    }
 
     // Find or create customer by phone
     let customerId: string | null = null
@@ -178,6 +189,7 @@ export default function AdminPage() {
     if (!insertError && data) {
       setReservations(prev => [...prev, data])
     }
+    return null
   }
 
   async function handleDeleteCustomer(id: string) {
@@ -323,6 +335,18 @@ export default function AdminPage() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('closedperiods')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
+              activeTab === 'closedperiods' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-black'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M1 6h12M5 1v2M9 1v2M4 9.5h6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            Εξαιρέσεις Προγράμματος
+          </button>
         </div>
 
         {/* Content */}
@@ -333,8 +357,8 @@ export default function AdminPage() {
             ))}
           </div>
         ) : activeTab === 'calendar' ? (
-          <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} onEdit={handleEdit} onToggleNoShow={handleToggleNoShow} />
-        ) : (
+          <AdminCalendar reservations={reservations} customers={customers} onDelete={handleDelete} onBook={handleBook} onEdit={handleEdit} onToggleNoShow={handleToggleNoShow} />
+        ) : activeTab === 'customers' ? (
           <CustomersTab
             customers={customers}
             reservations={reservations}
@@ -342,6 +366,8 @@ export default function AdminPage() {
             onToggleNoShow={handleToggleNoShow}
             onUpdateCustomer={handleUpdateCustomer}
           />
+        ) : (
+          <ClosedPeriodsTab />
         )}
       </div>
     </main>

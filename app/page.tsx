@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, Reservation } from '@/lib/supabase'
+import { supabase, Reservation, ClosedPeriod } from '@/lib/supabase'
 import { toLocalISODate, formatDate } from '@/lib/utils'
 import DatePicker from '@/components/DatePicker'
 import TimeSlotGrid from '@/components/TimeSlotGrid'
@@ -19,6 +19,7 @@ export default function Home() {
   const today = toLocalISODate(firstAvailable)
   const [selectedDate, setSelectedDate] = useState(today)
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({})
+  const [closedPeriods, setClosedPeriods] = useState<ClosedPeriod[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -28,17 +29,18 @@ export default function Home() {
 
   const fetchReservations = useCallback(async (date: string) => {
     setLoading(true)
-    const { data } = await supabase
-      .from('reservations')
-      .select('start_time')
-      .eq('date', date)
+    const [{ data: resData }, { data: closedData }] = await Promise.all([
+      supabase.from('reservations').select('start_time').eq('date', date),
+      supabase.from('closed_periods').select('*').gte('date', toLocalISODate(new Date())),
+    ])
 
     const counts: Record<string, number> = {}
-    for (const r of (data || [])) {
+    for (const r of (resData || [])) {
       const slot = (r as { start_time: string }).start_time.slice(0, 5)
       counts[slot] = (counts[slot] || 0) + 1
     }
     setSlotCounts(counts)
+    setClosedPeriods((closedData as ClosedPeriod[]) || [])
     setLoading(false)
   }, [])
 
@@ -73,7 +75,7 @@ export default function Home() {
                 <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
                   <div className="w-2 h-2 bg-white rounded-full" />
                 </div>
-                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Γυμναστήριο</span>
+                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Health Club</span>
               </div>
               <h1 className="text-5xl sm:text-6xl font-black tracking-tight leading-none text-black">
                 Physique
@@ -131,6 +133,7 @@ export default function Home() {
             onSelectSlot={setSelectedSlot}
             loading={loading}
             selectedDate={selectedDate}
+            closedPeriods={closedPeriods}
           />
         </div>
 

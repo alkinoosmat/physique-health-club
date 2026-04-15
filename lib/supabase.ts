@@ -35,6 +35,14 @@ export type CustomerPayment = {
   created_at: string
 }
 
+export type ClosedPeriod = {
+  id: string
+  label: string           // e.g. "Πάσχα", "Άγιος Βασίλης"
+  date: string            // YYYY-MM-DD — always set
+  slot: string | null     // HH:MM — null means entire day is closed
+  created_at: string
+}
+
 export type CustomerGoal = {
   id: string
   customer_id: string

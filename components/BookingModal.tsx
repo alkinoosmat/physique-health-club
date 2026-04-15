@@ -43,6 +43,20 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
         return
       }
 
+      // Check for duplicate booking same person same slot
+      const { count: dupCount } = await supabase
+        .from('reservations')
+        .select('id', { count: 'exact', head: true })
+        .eq('date', date)
+        .eq('start_time', `${slot}:00`)
+        .eq('phone', phone.trim())
+
+      if ((dupCount ?? 0) > 0) {
+        setError('Υπάρχει ήδη κράτηση για αυτό το τηλέφωνο σε αυτή την ώρα.')
+        setLoading(false)
+        return
+      }
+
       // Find or create customer by phone
       const normalizedPhone = phone.trim()
       let customerId: string | null = null

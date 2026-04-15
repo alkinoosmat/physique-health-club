@@ -1,24 +1,29 @@
 'use client'
 
-import { useState } from 'react'
-import { Reservation } from '@/lib/supabase'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import { Reservation, Customer } from '@/lib/supabase'
 import { TIME_SLOTS, formatTime, toLocalISODate, formatDate } from '@/lib/utils'
 
 const MAX_PER_SLOT = 7
 
 interface AdminCalendarProps {
   reservations: Reservation[]
+  customers: Customer[]
   onDelete: (id: string) => void
-  onBook: (date: string, slot: string, name: string, phone: string) => Promise<void>
+  onBook: (date: string, slot: string, name: string, phone: string) => Promise<string | null>
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
   onToggleNoShow: (id: string, value: boolean) => Promise<void>
 }
 
-export default function AdminCalendar({ reservations, onDelete, onBook, onEdit, onToggleNoShow }: AdminCalendarProps) {
+export default function AdminCalendar({ reservations, customers, onDelete, onBook, onEdit, onToggleNoShow }: AdminCalendarProps) {
   const today = new Date()
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const [currentDate, setCurrentDate] = useState(today)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [pickerAnchor, setPickerAnchor] = useState<{ top: number; right: number } | null>(null)
+  const calBtnRef = useRef<HTMLButtonElement>(null)
 
   function getWeekStart(date: Date): Date {
     const d = new Date(date)
@@ -105,7 +110,7 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit, 
 
       {/* Controls */}
       <div className="space-y-2">
-        {/* Row 1: view toggle + today */}
+        {/* Row 1: view toggle + today + date jump */}
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl border border-gray-200 overflow-hidden">
             <button
@@ -127,6 +132,32 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit, 
           >
             Σήμερα
           </button>
+          {/* Custom date picker */}
+          <div className="ml-auto">
+            <button
+              ref={calBtnRef}
+              onClick={() => {
+                const rect = calBtnRef.current?.getBoundingClientRect()
+                if (rect) setPickerAnchor({ top: rect.bottom + 8, right: window.innerWidth - rect.right })
+                setShowDatePicker(v => !v)
+              }}
+              className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${showDatePicker ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-400 hover:border-black hover:text-black'}`}
+              title="Μετάβαση σε ημερομηνία"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M1 6h12M5 1v2M9 1v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+          {showDatePicker && pickerAnchor && (
+            <DateJumpPicker
+              currentDate={currentDate}
+              anchor={pickerAnchor}
+              onSelect={d => { setCurrentDate(d); setViewMode('day'); setShowDatePicker(false) }}
+              onClose={() => setShowDatePicker(false)}
+            />
+          )}
         </div>
 
         {/* Row 2: prev / label / next */}
@@ -163,6 +194,7 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit, 
         <DayView
           dateIso={currentIso}
           reservations={getReservationsForDate(currentIso)}
+          customers={customers}
           onDelete={onDelete}
           onBook={(slot, name, phone) => onBook(currentIso, slot, name, phone)}
           onEdit={onEdit}
@@ -188,13 +220,118 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit, 
   )
 }
 
+// ─── Date Jump Picker ────────────────────────────────────────────────────────
+
+const MONTH_NAMES = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαϊ', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ']
+const DAY_NAMES = ['Δε', 'Τρ', 'Τε', 'Πε', 'Πα', 'Σα', 'Κυ']
+
+function DateJumpPicker({ currentDate, anchor, onSelect, onClose }: {
+  currentDate: Date
+  anchor: { top: number; right: number }
+  onSelect: (d: Date) => void
+  onClose: () => void
+}) {
+  const [viewYear, setViewYear] = useState(currentDate.getFullYear())
+  const [viewMonth, setViewMonth] = useState(currentDate.getMonth())
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [onClose])
+
+  const todayIso = toLocalISODate(new Date())
+  const currentIso = toLocalISODate(currentDate)
+
+  // Build calendar grid
+  const firstDay = new Date(viewYear, viewMonth, 1)
+  // Week starts Monday: (0=Sun → 6, 1=Mon → 0, ..., 6=Sat → 5)
+  const startOffset = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: (number | null)[] = [
+    ...Array(startOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  // Pad to full rows
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  return createPortal(
+    <div
+      ref={ref}
+      className="bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 w-72"
+      style={{ position: 'fixed', top: anchor.top, right: anchor.right, zIndex: 9999 }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={prevMonth} className="w-7 h-7 rounded-xl flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-100 transition-all">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M9 11L5 7l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <span className="text-sm font-bold">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} className="w-7 h-7 rounded-xl flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-100 transition-all">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_NAMES.map(d => (
+          <div key={d} className="text-center text-[10px] font-semibold text-gray-300 py-1">{d}</div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          const isToday = iso === todayIso
+          const isSelected = iso === currentIso
+          return (
+            <button
+              key={i}
+              onClick={() => onSelect(new Date(iso + 'T12:00:00'))}
+              className={`h-8 w-full rounded-xl text-xs font-medium transition-all ${
+                isSelected
+                  ? 'bg-black text-white'
+                  : isToday
+                  ? 'bg-gray-100 text-black font-bold'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 // ─── Day View ────────────────────────────────────────────────────────────────
 
-function DayView({ dateIso, reservations, onDelete, onBook, onEdit, onToggleNoShow, editingId, onEditingIdChange }: {
+function DayView({ dateIso, reservations, customers, onDelete, onBook, onEdit, onToggleNoShow, editingId, onEditingIdChange }: {
   dateIso: string
   reservations: Reservation[]
+  customers: Customer[]
   onDelete: (id: string) => void
-  onBook: (slot: string, name: string, phone: string) => Promise<void>
+  onBook: (slot: string, name: string, phone: string) => Promise<string | null>
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
   onToggleNoShow: (id: string, value: boolean) => Promise<void>
   editingId: string | null
@@ -240,9 +377,11 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, onToggleNoSh
                 {isBooking ? (
                   <AdminBookingForm
                     slot={slot}
+                    customers={customers}
                     onConfirm={async (name, phone) => {
-                      await onBook(slot, name, phone)
-                      setBookingSlot(null)
+                      const err = await onBook(slot, name, phone)
+                      if (!err) setBookingSlot(null)
+                      return err
                     }}
                     onCancel={() => setBookingSlot(null)}
                   />
@@ -262,7 +401,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, onToggleNoSh
                     {!isFull && (
                       <button
                         onClick={() => setBookingSlot(slot)}
-                        className="w-full h-10 rounded-xl border border-dashed border-gray-200 flex items-center gap-2 px-3 text-xs text-gray-300 hover:border-black hover:text-black transition-all group"
+                        className="w-full h-10 rounded-2xl border border-dashed border-gray-200 flex items-center gap-2 px-3 text-xs text-gray-300 hover:border-black hover:text-black transition-all group"
                       >
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-shrink-0">
                           <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -296,15 +435,89 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, onToggleNoSh
   )
 }
 
-function AdminBookingForm({ slot, onConfirm, onCancel }: {
+type DropdownAnchor = { top: number; left: number; width: number } | null
+
+function CustomerDropdown({ suggestions, anchor, onSelect }: {
+  suggestions: Customer[]
+  anchor: DropdownAnchor
+  onSelect: (c: Customer) => void
+}) {
+  if (!suggestions.length || !anchor) return null
+  return createPortal(
+    <div
+      className="bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden"
+      style={{ position: 'fixed', top: anchor.top, left: anchor.left, width: Math.max(anchor.width, 220), zIndex: 9999 }}
+    >
+      {suggestions.map(c => (
+        <button
+          key={c.id}
+          type="button"
+          onMouseDown={e => { e.preventDefault(); onSelect(c) }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left transition-colors"
+        >
+          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-[10px] font-bold text-gray-500">{c.name.charAt(0).toUpperCase()}</span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-black truncate">{c.name}</p>
+            <p className="text-xs text-gray-400">{c.phone}</p>
+          </div>
+        </button>
+      ))}
+    </div>,
+    document.body
+  )
+}
+
+function AdminBookingForm({ slot, customers, onConfirm, onCancel }: {
   slot: string
-  onConfirm: (name: string, phone: string) => Promise<void>
+  customers: Customer[]
+  onConfirm: (name: string, phone: string) => Promise<string | null>
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [suggestions, setSuggestions] = useState<Customer[]>([])
+  const [activeField, setActiveField] = useState<'name' | 'phone' | null>(null)
+  const [anchor, setAnchor] = useState<DropdownAnchor>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const phoneRef = useRef<HTMLInputElement>(null)
+
+  const closeSuggestions = useCallback(() => {
+    setSuggestions([])
+    setActiveField(null)
+    setAnchor(null)
+  }, [])
+
+  useEffect(() => {
+    function handleClickOutside() { closeSuggestions() }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [closeSuggestions])
+
+  function openSuggestions(query: string, field: 'name' | 'phone', inputEl: HTMLInputElement | null) {
+    const q = query.toLowerCase().trim()
+    if (!q || !inputEl) { closeSuggestions(); return }
+    const matches = customers.filter(c =>
+      field === 'name'
+        ? c.name.toLowerCase().includes(q)
+        : c.phone.includes(q)
+    ).slice(0, 5)
+    if (!matches.length) { closeSuggestions(); return }
+    const rect = inputEl.getBoundingClientRect()
+    setSuggestions(matches)
+    setActiveField(field)
+    setAnchor({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+  }
+
+  function selectCustomer(c: Customer) {
+    setName(c.name)
+    setPhone(c.phone)
+    closeSuggestions()
+    setError('')
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -312,7 +525,8 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
     setLoading(true)
     setError('')
     try {
-      await onConfirm(name.trim(), phone.trim() || '-')
+      const err = await onConfirm(name.trim(), phone.trim() || '-')
+      if (err) { setError(err); setLoading(false) }
     } catch {
       setError('Σφάλμα. Δοκίμασε ξανά.')
       setLoading(false)
@@ -320,47 +534,66 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-black bg-white p-3 space-y-2 animate-scale-in">
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-black bg-white p-4 space-y-3 animate-scale-in">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-1.5 h-1.5 rounded-full bg-black flex-shrink-0" />
         <span className="text-xs font-semibold">{formatTime(slot)}</span>
         <span className="text-xs text-gray-400">— Νέα κράτηση</span>
       </div>
       <div className="flex gap-2">
-        <input
-          autoFocus
-          type="text"
-          value={name}
-          onChange={e => { setName(e.target.value); setError('') }}
-          placeholder="Όνομα πελάτη"
-          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
-          required
-        />
-        <input
-          type="tel"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          placeholder="Τηλέφωνο"
-          className="w-28 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
-        />
+        <div className="flex-1 min-w-0">
+          <input
+            ref={nameRef}
+            autoFocus
+            type="text"
+            value={name}
+            onChange={e => { setName(e.target.value); setError(''); openSuggestions(e.target.value, 'name', nameRef.current) }}
+            onFocus={() => openSuggestions(name, 'name', nameRef.current)}
+            onBlur={closeSuggestions}
+            placeholder="Όνομα πελάτη"
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+            required
+            autoComplete="off"
+          />
+        </div>
+        <div className="w-28">
+          <input
+            ref={phoneRef}
+            type="tel"
+            value={phone}
+            onChange={e => { setPhone(e.target.value); openSuggestions(e.target.value, 'phone', phoneRef.current) }}
+            onFocus={() => openSuggestions(phone, 'phone', phoneRef.current)}
+            onBlur={closeSuggestions}
+            placeholder="Τηλέφωνο"
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+            autoComplete="off"
+          />
+        </div>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex gap-2">
         <button
           type="button"
           onClick={onCancel}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-black transition-all"
+          className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-black transition-all"
         >
           Άκυρο
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
+          className="px-3 py-1.5 rounded-xl bg-black text-white text-xs font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
         >
           {loading ? 'Αποθήκευση...' : 'Αποθήκευση'}
         </button>
       </div>
+      {activeField && (
+        <CustomerDropdown
+          suggestions={suggestions}
+          anchor={anchor}
+          onSelect={selectCustomer}
+        />
+      )}
     </form>
   )
 }
@@ -384,7 +617,7 @@ function DayReservationCard({ reservation, onDelete, onStartEdit, onToggleNoShow
 
   if (confirming) {
     return (
-      <div className="rounded-xl border border-red-500 bg-black text-white flex items-center justify-between px-3 py-2.5">
+      <div className="rounded-2xl border border-red-500 bg-black text-white flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
           <span className="text-sm font-medium truncate">{reservation.name}</span>
@@ -406,7 +639,7 @@ function DayReservationCard({ reservation, onDelete, onStartEdit, onToggleNoShow
   }
 
   return (
-    <div className={`relative rounded-xl border group transition-all ${isNoShow ? 'bg-amber-950 border-amber-800' : 'bg-black border-gray-900'}`}>
+    <div className={`relative rounded-2xl border group transition-all ${isNoShow ? 'bg-amber-950 border-amber-800' : 'bg-black border-gray-900'}`}>
       <button
         onClick={onStartEdit}
         className="w-full text-left px-3 py-2.5 flex items-center gap-2.5 min-w-0 pr-20"
@@ -419,7 +652,7 @@ function DayReservationCard({ reservation, onDelete, onStartEdit, onToggleNoShow
         <button
           onClick={handleNoShow}
           disabled={togglingNoShow}
-          className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all disabled:opacity-50 ${
+          className={`text-[10px] font-semibold px-2 py-1 rounded-xl border transition-all disabled:opacity-50 ${
             isNoShow
               ? 'bg-amber-400/20 border-amber-600 text-amber-400 hover:bg-amber-400/30'
               : 'bg-white/10 border-gray-600 text-gray-400 hover:border-amber-500 hover:text-amber-400'
@@ -493,7 +726,7 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-black bg-white p-3 space-y-2">
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-black bg-white p-4 space-y-3">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-1.5 h-1.5 rounded-full bg-black flex-shrink-0" />
         <span className="text-xs font-semibold">Επεξεργασία κράτησης</span>
@@ -507,7 +740,7 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
           value={name}
           onChange={e => { setName(e.target.value); setError('') }}
           placeholder="Όνομα πελάτη"
-          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
           required
         />
         <input
@@ -515,7 +748,7 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
           value={phone}
           onChange={e => setPhone(e.target.value)}
           placeholder="Τηλέφωνο"
-          className="w-28 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
+          className="w-28 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
         />
       </div>
 
@@ -524,7 +757,7 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
         <select
           value={date}
           onChange={e => setDate(e.target.value)}
-          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors bg-white"
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors bg-white"
         >
           {dateOptions.map(o => (
             <option key={o.iso} value={o.iso}>{o.label}</option>
@@ -533,7 +766,7 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
         <select
           value={slot}
           onChange={e => setSlot(e.target.value)}
-          className="w-28 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors bg-white"
+          className="w-28 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors bg-white"
         >
           {TIME_SLOTS.map(s => (
             <option key={s} value={s}>{formatTime(s)}</option>
@@ -547,14 +780,14 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
         <button
           type="button"
           onClick={onCancel}
-          className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-black transition-all"
+          className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-black transition-all"
         >
           Άκυρο
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
+          className="px-3 py-1.5 rounded-xl bg-black text-white text-xs font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
         >
           {loading ? 'Αποθήκευση...' : 'Αποθήκευση'}
         </button>
@@ -727,7 +960,7 @@ function DesktopWeekCell({ reservation, onStartEdit, onToggleNoShow }: {
   }
 
   return (
-    <div className={`relative rounded-lg text-white group transition-all ${isNoShow ? 'bg-amber-950' : 'bg-black'}`}>
+    <div className={`relative rounded-2xl text-white group transition-all ${isNoShow ? 'bg-amber-950' : 'bg-black'}`}>
       <button onClick={onStartEdit} className="w-full text-left px-2 py-1.5">
         <span className={`text-[11px] font-medium block w-full truncate ${isNoShow ? 'line-through text-amber-300' : ''}`}>
           {reservation.name}
@@ -764,7 +997,7 @@ function MobileWeekCard({ reservation, onDelete, onStartEdit, onToggleNoShow }: 
   }
 
   return (
-    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${
+    <div className={`flex items-center justify-between rounded-2xl px-3 py-2 border transition-all ${
       confirming ? 'bg-red-50 border-red-200' : isNoShow ? 'bg-amber-950 border-amber-800' : 'bg-black border-gray-900'
     }`}>
       <div className="flex items-center gap-2 min-w-0">
@@ -783,7 +1016,7 @@ function MobileWeekCard({ reservation, onDelete, onStartEdit, onToggleNoShow }: 
           <button
             onClick={handleNoShow}
             disabled={togglingNoShow}
-            className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border transition-all disabled:opacity-50 ${
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-xl border transition-all disabled:opacity-50 ${
               isNoShow
                 ? 'border-amber-600 text-amber-400'
                 : 'border-gray-700 text-gray-500 hover:border-amber-600 hover:text-amber-400'
