@@ -176,6 +176,22 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   const onEditRef = useRef(onEdit)
   onEditRef.current = onEdit
 
+  const commitMoveRef = useRef((_id: string, _slot: string) => {})
+  commitMoveRef.current = (id: string, targetSlot: string) => {
+    const reservation = reservationsRef.current.find(r => r.id === id)
+    if (!reservation) return
+    if (reservation.start_time.slice(0, 5) === targetSlot) return
+    const [h] = targetSlot.split(':').map(Number)
+    const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
+    onEditRef.current(id, {
+      name: reservation.name,
+      phone: reservation.phone,
+      date: reservation.date,
+      start_time: targetSlot,
+      end_time: endTime,
+    })
+  }
+
   // Touch drag state
   const ghostRef = useRef<HTMLDivElement | null>(null)
   const touchDraggingId = useRef<string | null>(null)
@@ -194,23 +210,8 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   function handleDrop(targetSlot: string) {
     setDragOverSlot(null)
     if (!draggingId) return
-    commitMove(draggingId, targetSlot)
+    commitMoveRef.current(draggingId, targetSlot)
     setDraggingId(null)
-  }
-
-  function commitMove(id: string, targetSlot: string) {
-    const reservation = reservationsRef.current.find(r => r.id === id)
-    if (!reservation) return
-    if (reservation.start_time.slice(0, 5) === targetSlot) return
-    const [h] = targetSlot.split(':').map(Number)
-    const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-    onEditRef.current(id, {
-      name: reservation.name,
-      phone: reservation.phone,
-      date: reservation.date,
-      start_time: targetSlot,
-      end_time: endTime,
-    })
   }
 
   // ── Touch drag handlers ───────────────────────────────────────────────────
@@ -305,7 +306,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
     setDragOverSlot(null)
 
     if (targetSlot && id) {
-      commitMove(id, targetSlot)
+      commitMoveRef.current(id, targetSlot)
     }
   }, [])
 
