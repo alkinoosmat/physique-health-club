@@ -59,7 +59,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white overflow-x-hidden">
       {/* Hero / Branding */}
       <div className="border-b border-gray-100">
         <div className="max-w-4xl mx-auto px-6 py-12">

@@ -134,7 +134,7 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
         />
       )}
 
-      {/* Week View — horizontal scroll on mobile, full grid on desktop */}
+      {/* Week View */}
       {viewMode === 'week' && (
         <WeekView
           weekDays={weekDays}
@@ -143,12 +143,8 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
           onDelete={onDelete}
           onEdit={onEdit}
           onSelectDay={(d) => { setCurrentDate(d); setViewMode('day') }}
-          onEditFromWeek={(reservation) => {
-            const [year, month, day] = reservation.date.split('-').map(Number)
-            setCurrentDate(new Date(year, month - 1, day))
-            setEditingId(reservation.id)
-            setViewMode('day')
-          }}
+          editingId={editingId}
+          onEditingIdChange={setEditingId}
         />
       )}
     </div>
@@ -527,15 +523,22 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
 
 // ─── Week View ───────────────────────────────────────────────────────────────
 
-function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit, onSelectDay, onEditFromWeek }: {
+function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit, onSelectDay, editingId, onEditingIdChange }: {
   weekDays: Date[]
   todayIso: string
   getReservationsForDate: (iso: string) => Reservation[]
   onDelete: (id: string) => void
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
   onSelectDay: (d: Date) => void
-  onEditFromWeek: (reservation: Reservation) => void
+  editingId: string | null
+  onEditingIdChange: (id: string | null) => void
 }) {
+  // Only show slots that have at least one booking across the week, for a cleaner view
+  const weekIsos = weekDays.map(d => toLocalISODate(d))
+  const allReservations = weekIsos.flatMap(iso => getReservationsForDate(iso))
+  const occupiedSlots = new Set(allReservations.map(r => r.start_time.slice(0, 5)))
+  const visibleSlots = TIME_SLOTS.filter(s => occupiedSlots.has(s))
+
   return (
     <div>
       {/* Mobile: vertical list of days */}
@@ -548,14 +551,13 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
 
           return (
             <div key={iso} className="rounded-2xl border border-gray-200 overflow-hidden">
-              {/* Day header */}
               <button
                 onClick={() => onSelectDay(day)}
                 className={`w-full flex items-center justify-between px-4 py-3 text-left transition-all ${isToday ? 'bg-black text-white' : 'bg-gray-50 hover:bg-gray-100'}`}
               >
                 <div className="flex items-center gap-3">
                   <div>
-                    <p className={`text-sm font-bold ${isToday ? 'text-white' : 'text-black'}`}>
+                    <p className={`text-sm font-bold capitalize ${isToday ? 'text-white' : 'text-black'}`}>
                       {day.toLocaleDateString('el-GR', { weekday: 'long' })}
                     </p>
                     <p className={`text-xs ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
@@ -566,28 +568,18 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-medium ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
-                    {totalBookings === 0 ? 'Καμία κράτηση' : `${totalBookings} κράτηση${totalBookings !== 1 ? 'εις' : ''}`}
+                    {totalBookings === 0 ? 'Καμία' : `${totalBookings} κρατήσεις`}
                   </span>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={isToday ? 'text-gray-400' : 'text-gray-300'}>
                     <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
               </button>
-
-              {/* Day bookings preview */}
               {totalBookings > 0 && (
                 <div className="px-4 py-3 space-y-1.5">
-                  {dayReservations.slice(0, 3).map(r => (
+                  {dayReservations.map(r => (
                     <MobileWeekCard key={r.id} reservation={r} onDelete={onDelete} onEdit={onEdit} />
                   ))}
-                  {totalBookings > 3 && (
-                    <button
-                      onClick={() => onSelectDay(day)}
-                      className="text-xs text-gray-400 hover:text-black transition-colors py-1"
-                    >
-                      +{totalBookings - 3} ακόμα — πάτα για να δεις όλες
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -595,48 +587,111 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
         })}
       </div>
 
-      {/* Desktop: 7-column grid */}
-      <div className="hidden sm:grid grid-cols-7 gap-2">
-        {weekDays.map((day) => {
-          const iso = toLocalISODate(day)
-          const dayReservations = getReservationsForDate(iso)
-          const isToday = iso === todayIso
-
-          return (
-            <div key={iso} className="min-h-[220px]">
+      {/* Desktop: time-slot grid */}
+      <div className="hidden sm:block">
+        {/* Day headers */}
+        <div className="grid gap-px mb-1" style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
+          <div />
+          {weekDays.map((day) => {
+            const iso = toLocalISODate(day)
+            const isToday = iso === todayIso
+            const count = getReservationsForDate(iso).length
+            return (
               <button
+                key={iso}
                 onClick={() => onSelectDay(day)}
-                className={`w-full text-center mb-2 py-2 px-1 rounded-xl text-xs font-medium transition-all hover:opacity-80 ${isToday ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50 border border-gray-100'}`}
+                className={`text-center py-2 px-1 rounded-xl transition-all hover:opacity-80 ${isToday ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
               >
-                <div className="uppercase tracking-wide text-[10px]">{day.toLocaleDateString('el-GR', { weekday: 'short' })}</div>
-                <div className="text-lg font-bold mt-0.5">{day.getDate()}</div>
-                {dayReservations.length > 0 && (
-                  <div className={`text-[10px] mt-0.5 ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
-                    {dayReservations.length} κρατήσεις
+                <div className={`text-[10px] font-semibold uppercase tracking-wide ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
+                  {day.toLocaleDateString('el-GR', { weekday: 'short' })}
+                </div>
+                <div className={`text-xl font-black mt-0.5 ${isToday ? 'text-white' : 'text-black'}`}>
+                  {day.getDate()}
+                </div>
+                {count > 0 && (
+                  <div className={`text-[10px] mt-0.5 font-medium ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
+                    {count} κρατ.
                   </div>
                 )}
               </button>
-              <div className="space-y-1">
-                {dayReservations.slice(0, 4).map(r => (
-                  <DesktopWeekCard key={r.id} reservation={r} onDelete={onDelete} onEdit={() => onEditFromWeek(r)} />
-                ))}
-                {dayReservations.length > 4 && (
-                  <button
-                    onClick={() => onSelectDay(day)}
-                    className="w-full text-center text-[10px] text-gray-400 hover:text-black transition-colors py-0.5"
-                  >
-                    +{dayReservations.length - 4} more
-                  </button>
-                )}
-                {dayReservations.length === 0 && (
-                  <div className="h-12 rounded-lg border border-dashed border-gray-100 flex items-center justify-center">
-                    <span className="text-xs text-gray-200">—</span>
-                  </div>
-                )}
+            )
+          })}
+        </div>
+
+        {/* Time slot rows */}
+        {visibleSlots.length === 0 ? (
+          <div className="py-16 text-center text-sm text-gray-300">Καμία κράτηση αυτή την εβδομάδα</div>
+        ) : (
+          <div className="border border-gray-100 rounded-2xl overflow-hidden">
+            {visibleSlots.map((slot, idx) => (
+              <div
+                key={slot}
+                className={`grid gap-px ${idx < visibleSlots.length - 1 ? 'border-b border-gray-100' : ''}`}
+                style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}
+              >
+                {/* Time label */}
+                <div className="flex items-center justify-end pr-3 py-2 text-[11px] font-medium text-gray-400 tabular-nums bg-white">
+                  {formatTime(slot)}
+                </div>
+                {/* Day cells */}
+                {weekDays.map((day) => {
+                  const iso = toLocalISODate(day)
+                  const cellReservations = getReservationsForDate(iso).filter(r => r.start_time.slice(0, 5) === slot)
+                  const isToday = iso === todayIso
+
+                  return (
+                    <div
+                      key={iso}
+                      className={`py-1.5 px-1 space-y-1 min-h-[44px] ${isToday ? 'bg-gray-50' : 'bg-white'}`}
+                    >
+                      {cellReservations.length === 0 ? (
+                        <div className="h-full min-h-[28px] flex items-center justify-center">
+                          <span className="text-[10px] text-gray-200">—</span>
+                        </div>
+                      ) : (
+                        cellReservations.map(r => (
+                          editingId === r.id ? (
+                            <AdminEditForm
+                              key={r.id}
+                              reservation={r}
+                              onConfirm={async (fields) => { await onEdit(r.id, fields); onEditingIdChange(null) }}
+                              onCancel={() => onEditingIdChange(null)}
+                            />
+                          ) : (
+                            <div
+                              key={r.id}
+                              className="rounded-lg bg-black text-white px-2 py-1 flex items-center justify-between gap-1 group"
+                            >
+                              <span className="text-[11px] font-medium truncate">{r.name}</span>
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                <button
+                                  onClick={() => onEditingIdChange(r.id)}
+                                  className="text-gray-500 hover:text-white transition-colors p-0.5"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+                                    <path d="M9.5 2.5l2 2M2 10l.5 1.5L4 11l7-7-2-2-7 7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => onDelete(r.id)}
+                                  className="text-gray-500 hover:text-red-400 transition-colors p-0.5"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+                                    <path d="M2 3.5h10M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        ))
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            </div>
-          )
-        })}
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -690,40 +745,3 @@ function MobileWeekCard({ reservation, onDelete, onEdit }: {
   )
 }
 
-function DesktopWeekCard({ reservation, onDelete, onEdit }: {
-  reservation: Reservation
-  onDelete: (id: string) => void
-  onEdit: () => void
-}) {
-  const [confirming, setConfirming] = useState(false)
-
-  return (
-    <div className={`rounded-lg px-2 py-1.5 border transition-all ${confirming ? 'bg-red-50 border-red-200' : 'bg-black border-gray-900'}`}>
-      <div className="flex items-center justify-between gap-1">
-        <span className={`text-[11px] font-medium truncate ${confirming ? 'text-red-700' : 'text-white'}`}>{reservation.name}</span>
-        {confirming ? (
-          <div className="flex gap-1 flex-shrink-0">
-            <button onClick={() => setConfirming(false)} className="text-[10px] text-gray-500">✕</button>
-            <button onClick={() => onDelete(reservation.id)} className="text-[10px] text-red-500 font-bold">Διαγρ.</button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <button onClick={onEdit} title="Επεξεργασία" className="text-gray-500 hover:text-white transition-colors">
-              <svg width="9" height="9" viewBox="0 0 14 14" fill="none">
-                <path d="M9.5 2.5l2 2M2 10l.5 1.5L4 11l7-7-2-2-7 7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            <button onClick={() => setConfirming(true)} className="text-gray-500 hover:text-red-400 transition-colors">
-              <svg width="9" height="9" viewBox="0 0 14 14" fill="none">
-                <path d="M2 3.5h10M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
-      <div className={`text-[10px] mt-0.5 ${confirming ? 'text-red-400' : 'text-gray-400'}`}>
-        {formatTime(reservation.start_time.slice(0, 5))}
-      </div>
-    </div>
-  )
-}
