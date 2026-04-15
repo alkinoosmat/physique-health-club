@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { Reservation } from '@/lib/supabase'
 import { TIME_SLOTS, formatTime, toLocalISODate, formatDate } from '@/lib/utils'
 
@@ -167,130 +167,6 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   onEditingIdChange: (id: string | null) => void
 }) {
   const [bookingSlot, setBookingSlot] = useState<string | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-
-  // Keep always-fresh refs so native touch handlers never go stale
-  const reservationsRef = useRef(reservations)
-  reservationsRef.current = reservations
-  const onEditRef = useRef(onEdit)
-  onEditRef.current = onEdit
-  const setDraggingIdRef = useRef(setDraggingId)
-  setDraggingIdRef.current = setDraggingId
-
-  // ── Native touch drag (attached via useEffect so passive:false works) ──────
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    let ghost: HTMLDivElement | null = null
-    let activeDragId: string | null = null
-    let activeDragName: string | null = null
-    let activeOverSlot: string | null = null
-
-    function highlightSlot(slot: string | null) {
-      if (activeOverSlot === slot) return
-      if (activeOverSlot) {
-        container!.querySelector(`[data-slot="${activeOverSlot}"] [data-drop-target]`)
-          ?.classList.remove('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
-      }
-      if (slot) {
-        container!.querySelector(`[data-slot="${slot}"] [data-drop-target]`)
-          ?.classList.add('ring-2', 'ring-black', 'ring-offset-1', 'bg-gray-50')
-      }
-      activeOverSlot = slot
-    }
-
-    function onTouchStart(e: TouchEvent) {
-      const card = (e.target as HTMLElement).closest('[data-reservation-id]')
-      if (!card) return
-
-      const id = card.getAttribute('data-reservation-id')!
-      const name = card.getAttribute('data-reservation-name') || ''
-
-      activeDragId = id
-      activeDragName = name
-      setDraggingIdRef.current(id)
-
-      const touch = e.touches[0]
-      ghost = document.createElement('div')
-      ghost.style.cssText = `
-        position:fixed;left:${touch.clientX - 80}px;top:${touch.clientY - 22}px;
-        width:160px;padding:8px 12px;background:#000;color:#fff;border-radius:10px;
-        font-size:13px;font-weight:500;pointer-events:none;z-index:9999;opacity:0.9;
-        box-shadow:0 8px 24px rgba(0,0,0,0.3);white-space:nowrap;overflow:hidden;
-        text-overflow:ellipsis;
-      `
-      ghost.textContent = activeDragName
-      document.body.appendChild(ghost)
-
-      e.preventDefault() // must be called in non-passive listener
-    }
-
-    function onTouchMove(e: TouchEvent) {
-      if (!activeDragId || !ghost) return
-      e.preventDefault()
-
-      const touch = e.touches[0]
-      ghost.style.left = `${touch.clientX - 80}px`
-      ghost.style.top = `${touch.clientY - 22}px`
-
-      ghost.style.display = 'none'
-      const el = document.elementFromPoint(touch.clientX, touch.clientY)
-      ghost.style.display = ''
-
-      const dropZone = el?.closest('[data-slot]')
-      const slot = dropZone?.getAttribute('data-slot') ?? null
-      highlightSlot(slot)
-    }
-
-    function onTouchEnd() {
-      if (!activeDragId) return
-
-      ghost?.remove()
-      ghost = null
-
-      // Capture before highlightSlot clears activeOverSlot
-      const finalSlot = activeOverSlot
-      const id = activeDragId
-
-      highlightSlot(null)
-      activeDragId = null
-      activeDragName = null
-      activeOverSlot = null
-
-      setDraggingIdRef.current(null)
-
-      if (finalSlot && id) {
-        const reservation = reservationsRef.current.find(r => r.id === id)
-        if (reservation && reservation.start_time.slice(0, 5) !== finalSlot) {
-          const [h] = finalSlot.split(':').map(Number)
-          const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-          onEditRef.current(id, {
-            name: reservation.name,
-            phone: reservation.phone,
-            date: reservation.date,
-            start_time: finalSlot,
-            end_time: endTime,
-          })
-        }
-      }
-    }
-
-    container.addEventListener('touchstart', onTouchStart, { passive: false })
-    container.addEventListener('touchmove', onTouchMove, { passive: false })
-    container.addEventListener('touchend', onTouchEnd)
-    container.addEventListener('touchcancel', onTouchEnd)
-
-    return () => {
-      container.removeEventListener('touchstart', onTouchStart)
-      container.removeEventListener('touchmove', onTouchMove)
-      container.removeEventListener('touchend', onTouchEnd)
-      container.removeEventListener('touchcancel', onTouchEnd)
-      ghost?.remove()
-    }
-  }, []) // empty — all live data accessed via refs
 
   const bySlot = new Map<string, Reservation[]>()
   for (const r of reservations) {
@@ -301,27 +177,8 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
 
   const totalBookings = reservations.length
 
-  // ── Desktop drop handler ──────────────────────────────────────────────────
-  function handleDrop(targetSlot: string) {
-    setDragOverSlot(null)
-    if (!draggingId) return
-    const reservation = reservationsRef.current.find(r => r.id === draggingId)
-    if (reservation && reservation.start_time.slice(0, 5) !== targetSlot) {
-      const [h] = targetSlot.split(':').map(Number)
-      const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-      onEditRef.current(draggingId, {
-        name: reservation.name,
-        phone: reservation.phone,
-        date: reservation.date,
-        start_time: targetSlot,
-        end_time: endTime,
-      })
-    }
-    setDraggingId(null)
-  }
-
   return (
-    <div ref={containerRef}>
+    <div>
       {/* Day summary */}
       <div className="flex items-center justify-between mb-3 px-1">
         <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
@@ -334,29 +191,18 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
         {TIME_SLOTS.map((slot) => {
           const slotReservations = bySlot.get(slot) || []
           const count = slotReservations.length
-          const draggingReservation = draggingId ? reservations.find(r => r.id === draggingId) : null
-          const draggingFromThisSlot = draggingReservation?.start_time.slice(0, 5) === slot
-          const effectiveCount = draggingFromThisSlot ? count - 1 : count
-          const isFull = effectiveCount >= MAX_PER_SLOT
+          const isFull = count >= MAX_PER_SLOT
           const isBooking = bookingSlot === slot
-          const isDragOver = dragOverSlot === slot && !isFull
 
           return (
-            <div
-              key={slot}
-              data-slot={slot}
-              className="flex gap-3 items-start"
-              onDragOver={e => { e.preventDefault(); if (!isFull) setDragOverSlot(slot) }}
-              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverSlot(null) }}
-              onDrop={() => handleDrop(slot)}
-            >
+            <div key={slot} className="flex gap-3 items-start">
               {/* Time label */}
               <div className="w-12 flex-shrink-0 text-xs font-medium text-gray-400 pt-3.5 text-right tabular-nums">
                 {formatTime(slot)}
               </div>
 
               {/* Slot content */}
-              <div data-drop-target className={`flex-1 min-w-0 rounded-xl transition-colors ${isDragOver ? 'bg-gray-50 ring-2 ring-black ring-offset-1' : ''}`}>
+              <div className="flex-1 min-w-0">
                 {isBooking ? (
                   <AdminBookingForm
                     slot={slot}
@@ -377,21 +223,11 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                         isEditing={editingId === r.id}
                         onStartEdit={() => onEditingIdChange(r.id)}
                         onStopEdit={() => onEditingIdChange(null)}
-                        isDragging={draggingId === r.id}
-                        onDragStart={() => setDraggingId(r.id)}
-                        onDragEnd={() => { setDraggingId(null); setDragOverSlot(null) }}
                       />
                     ))}
 
-                    {/* Drop hint when dragging over empty slot */}
-                    {isDragOver && count === 0 && (
-                      <div className="h-11 rounded-xl border-2 border-dashed border-black flex items-center justify-center">
-                        <span className="text-xs font-medium text-black">{formatTime(slot)}</span>
-                      </div>
-                    )}
-
-                    {/* Add button — shown when not full and not dragging */}
-                    {!isFull && !draggingId && (
+                    {/* Add button */}
+                    {!isFull && (
                       <button
                         onClick={() => setBookingSlot(slot)}
                         className="w-full h-10 rounded-xl border border-dashed border-gray-200 flex items-center gap-2 px-3 text-xs text-gray-300 hover:border-black hover:text-black transition-all group"
@@ -497,16 +333,13 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   )
 }
 
-function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit, isDragging, onDragStart, onDragEnd }: {
+function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit }: {
   reservation: Reservation
   onDelete: (id: string) => void
   onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
   isEditing: boolean
   onStartEdit: () => void
   onStopEdit: () => void
-  isDragging: boolean
-  onDragStart: () => void
-  onDragEnd: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -525,14 +358,7 @@ function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartE
   }
 
   return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      data-reservation-id={reservation.id}
-      data-reservation-name={reservation.name}
-      className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all cursor-grab active:cursor-grabbing select-none touch-none ${confirming ? 'border-red-500' : 'border-gray-900'} ${isDragging ? 'opacity-40' : 'opacity-100'}`}
-    >
+    <div className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all ${confirming ? 'border-red-500' : 'border-gray-900'}`}>
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
         <span className="text-sm font-medium truncate">{reservation.name}</span>
