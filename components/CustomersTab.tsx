@@ -299,6 +299,23 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
 
 // ─── Payments Section ─────────────────────────────────────────────────────────
 
+// How many days each subscription type adds to the start date
+const SUBSCRIPTION_DURATIONS: Record<string, number> = {
+  monthly: 30,
+  quarterly: 90,
+  annual: 365,
+  per_session: 0, // no auto-calculation for per-session
+}
+
+function calcNextPaymentDate(startDate: string, subscription: string): string {
+  const days = SUBSCRIPTION_DURATIONS[subscription]
+  if (!days || !startDate) return ''
+  const [y, m, d] = startDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + days)
+  return toLocalISODate(date)
+}
+
 function PaymentsSection({ customer, onUpdateCustomer }: {
   customer: Customer
   onUpdateCustomer: (id: string, fields: Partial<Customer>) => Promise<void>
@@ -307,25 +324,33 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
   const [saving, setSaving] = useState(false)
   const [subscription, setSubscription] = useState(customer.subscription ?? '')
   const [paymentStatus, setPaymentStatus] = useState<Customer['payment_status']>(customer.payment_status)
-  const [lastPayment, setLastPayment] = useState(customer.last_payment_date ?? '')
+  const [startDate, setStartDate] = useState(customer.last_payment_date ?? '')
   const [nextPayment, setNextPayment] = useState(customer.next_payment_date ?? '')
   const [reminder, setReminder] = useState(customer.payment_reminder ?? false)
 
-  // Sync if customer prop changes
+  // Sync if customer prop changes (e.g. after markAsPaid)
   useEffect(() => {
     setSubscription(customer.subscription ?? '')
     setPaymentStatus(customer.payment_status)
-    setLastPayment(customer.last_payment_date ?? '')
+    setStartDate(customer.last_payment_date ?? '')
     setNextPayment(customer.next_payment_date ?? '')
     setReminder(customer.payment_reminder ?? false)
   }, [customer])
+
+  // Auto-calculate next payment when subscription or start date changes
+  useEffect(() => {
+    if (subscription && startDate) {
+      const calculated = calcNextPaymentDate(startDate, subscription)
+      if (calculated) setNextPayment(calculated)
+    }
+  }, [subscription, startDate])
 
   async function handleSave() {
     setSaving(true)
     await onUpdateCustomer(customer.id, {
       subscription: subscription || null,
       payment_status: paymentStatus,
-      last_payment_date: lastPayment || null,
+      last_payment_date: startDate || null,
       next_payment_date: nextPayment || null,
       payment_reminder: reminder,
     })
@@ -335,16 +360,19 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
 
   async function markAsPaid() {
     const today = toLocalISODate(new Date())
+    const newNext = subscription ? calcNextPaymentDate(today, subscription) : customer.next_payment_date ?? null
     setSaving(true)
     await onUpdateCustomer(customer.id, {
       payment_status: 'paid',
       last_payment_date: today,
+      next_payment_date: newNext || null,
     })
     setSaving(false)
   }
 
   const ps = paymentStatusStyle(customer.payment_status)
   const subLabel = SUBSCRIPTION_OPTIONS.find(o => o.value === (customer.subscription ?? ''))?.label ?? '—'
+  const hasAutoCalc = subscription && SUBSCRIPTION_DURATIONS[subscription] > 0
 
   return (
     <div className="rounded-2xl border border-gray-200 overflow-hidden">
@@ -384,22 +412,32 @@ function PaymentsSection({ customer, onUpdateCustomer }: {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">Τελευταία πληρωμή</label>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                  Ημ/νία έναρξης / πληρωμής
+                </label>
                 <input
                   type="date"
-                  value={lastPayment}
-                  onChange={e => setLastPayment(e.target.value)}
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">Επόμενη πληρωμή</label>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                  Επόμενη πληρωμή
+                  {hasAutoCalc && <span className="ml-1 text-black font-semibold">· αυτόματα</span>}
+                </label>
                 <input
                   type="date"
                   value={nextPayment}
                   onChange={e => setNextPayment(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors"
+                  className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:border-black transition-colors ${hasAutoCalc ? 'border-black bg-gray-50' : 'border-gray-200'}`}
                 />
+                {hasAutoCalc && startDate && (
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Υπολογίστηκε από {startDate} + {SUBSCRIPTION_DURATIONS[subscription]} μέρες
+                  </p>
+                )}
               </div>
             </div>
             <label className="flex items-center gap-2 cursor-pointer select-none">
