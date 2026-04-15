@@ -661,7 +661,7 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
                           <div key={r.id} className="relative rounded-lg bg-black text-white group">
                             <button
                               onClick={() => onEditingIdChange(r.id)}
-                              className="w-full text-left px-2 py-1.5"
+                              className="w-full text-left px-2 pr-5 py-1.5"
                             >
                               <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
                             </button>
