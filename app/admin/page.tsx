@@ -130,69 +130,73 @@ export default function AdminPage() {
   if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-white overflow-x-hidden">
       {/* Header */}
       <div className="border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          {/* Top row: back + title + icon buttons */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
               <a
                 href="/"
-                className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-black hover:border-black transition-all"
+                className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-black hover:border-black transition-all flex-shrink-0"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </a>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 bg-black rounded-full flex items-center justify-center">
+                  <div className="w-4 h-4 bg-black rounded-full flex items-center justify-center flex-shrink-0">
                     <div className="w-1.5 h-1.5 bg-white rounded-full" />
                   </div>
-                  <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Διαχείριση</span>
+                  <span className="text-xs font-semibold tracking-[0.15em] uppercase text-gray-400 truncate">Διαχείριση</span>
                 </div>
-                <h1 className="text-2xl font-black tracking-tight mt-0.5">Πίνακας Διαχείρισης</h1>
+                <h1 className="text-lg sm:text-2xl font-black tracking-tight mt-0.5 truncate">Πίνακας Διαχείρισης</h1>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Icon-only on mobile, full buttons on desktop */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={fetchAll}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-black hover:text-black transition-all"
+                className="w-9 h-9 sm:w-auto sm:h-auto sm:px-4 sm:py-2.5 rounded-xl border border-gray-200 flex items-center justify-center gap-2 text-sm font-medium text-gray-600 hover:border-black hover:text-black transition-all"
+                title="Ανανέωση"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M1 7a6 6 0 1010.9-3.4M11 1v3H8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                Ανανέωση
+                <span className="hidden sm:inline">Ανανέωση</span>
               </button>
               <button
                 onClick={() => { sessionStorage.removeItem('admin_unlocked'); setUnlocked(false) }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-red-300 hover:text-red-600 transition-all"
+                className="w-9 h-9 sm:w-auto sm:h-auto sm:px-4 sm:py-2.5 rounded-xl border border-gray-200 flex items-center justify-center gap-2 text-sm font-medium text-gray-600 hover:border-red-300 hover:text-red-600 transition-all"
+                title="Αποσύνδεση"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M9 2h3a1 1 0 011 1v8a1 1 0 01-1 1H9M6 10l4-3-4-3M1 7h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                Αποσύνδεση
+                <span className="hidden sm:inline">Αποσύνδεση</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
-          <div className="px-5 py-4 rounded-xl border border-gray-200">
-            <div className="text-3xl font-black">{totalToday}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Κρατήσεις Σήμερα</div>
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <div className="px-3 sm:px-5 py-3 sm:py-4 rounded-xl border border-gray-200">
+            <div className="text-2xl sm:text-3xl font-black">{totalToday}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide leading-tight">Σήμερα</div>
           </div>
-          <div className="px-5 py-4 rounded-xl border border-gray-200">
-            <div className="text-3xl font-black">{totalUpcoming}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Από Αύριο</div>
+          <div className="px-3 sm:px-5 py-3 sm:py-4 rounded-xl border border-gray-200">
+            <div className="text-2xl sm:text-3xl font-black">{totalUpcoming}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide leading-tight">Αύριο+</div>
           </div>
-          <div className="px-5 py-4 rounded-xl border border-gray-200 col-span-2 sm:col-span-1">
-            <div className="text-3xl font-black">{reservations.length}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Σύνολο</div>
+          <div className="px-3 sm:px-5 py-3 sm:py-4 rounded-xl border border-gray-200">
+            <div className="text-2xl sm:text-3xl font-black">{reservations.length}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide leading-tight">Σύνολο</div>
           </div>
         </div>
 

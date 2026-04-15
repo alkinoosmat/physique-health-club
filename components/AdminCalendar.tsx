@@ -64,9 +64,33 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        {/* Nav row */}
-        <div className="flex items-center gap-2 flex-1">
+      <div className="space-y-2">
+        {/* Row 1: view toggle + today */}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => setViewMode('day')}
+              className={`px-4 py-2 text-sm font-medium transition-all ${viewMode === 'day' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:text-black'}`}
+            >
+              Ημέρα
+            </button>
+            <button
+              onClick={() => setViewMode('week')}
+              className={`px-4 py-2 text-sm font-medium transition-all ${viewMode === 'week' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:text-black'}`}
+            >
+              Εβδομάδα
+            </button>
+          </div>
+          <button
+            onClick={() => { setCurrentDate(new Date()); setViewMode('day') }}
+            className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:border-black hover:text-black transition-all"
+          >
+            Σήμερα
+          </button>
+        </div>
+
+        {/* Row 2: prev / label / next */}
+        <div className="flex items-center gap-2">
           <button
             onClick={prevPeriod}
             className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center hover:border-black transition-all flex-shrink-0"
@@ -76,8 +100,8 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
             </svg>
           </button>
 
-          <div className="flex-1 text-center">
-            <p className="text-sm font-semibold truncate">{periodLabel}</p>
+          <div className="flex-1 text-center min-w-0">
+            <p className="text-sm font-semibold truncate capitalize">{periodLabel}</p>
             {viewMode === 'day' && currentIso === todayIso && (
               <p className="text-xs text-gray-400">Σήμερα</p>
             )}
@@ -91,30 +115,6 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
               <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-        </div>
-
-        {/* Buttons row */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setCurrentDate(new Date()); setViewMode('day') }}
-            className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:border-black hover:text-black transition-all"
-          >
-            Σήμερα
-          </button>
-          <div className="flex rounded-xl border border-gray-200 overflow-hidden flex-1 sm:flex-none">
-            <button
-              onClick={() => setViewMode('day')}
-              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-all ${viewMode === 'day' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:text-black'}`}
-            >
-              Ημέρα
-            </button>
-            <button
-              onClick={() => setViewMode('week')}
-              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-all ${viewMode === 'week' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:text-black'}`}
-            >
-              Εβδομάδα
-            </button>
-          </div>
         </div>
       </div>
 
