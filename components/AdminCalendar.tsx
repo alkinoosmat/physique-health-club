@@ -368,53 +368,48 @@ function DayReservationCard({ reservation, onDelete, onStartEdit }: {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  if (confirming) {
+    return (
+      <div className="rounded-xl border border-red-500 bg-black text-white flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
+          <span className="text-sm font-medium truncate">{reservation.name}</span>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+          <button onClick={() => setConfirming(false)} className="text-xs text-gray-400 hover:text-white transition-colors px-1">
+            Άκυρο
+          </button>
+          <button
+            onClick={() => { setDeleting(true); onDelete(reservation.id) }}
+            disabled={deleting}
+            className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors px-1"
+          >
+            {deleting ? '…' : 'Διαγραφή'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all ${confirming ? 'border-red-500' : 'border-gray-900'}`}>
-      <div className="flex items-center gap-2.5 min-w-0">
+    <div className="relative rounded-xl border border-gray-900 bg-black text-white group">
+      <button
+        onClick={onStartEdit}
+        className="w-full text-left px-3 py-2.5 flex items-center gap-2.5 min-w-0"
+      >
         <div className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />
         <span className="text-sm font-medium truncate">{reservation.name}</span>
         <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">{reservation.phone !== '-' ? reservation.phone : ''}</span>
-      </div>
-      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-        {confirming ? (
-          <>
-            <button
-              onClick={() => setConfirming(false)}
-              className="text-xs text-gray-400 hover:text-white transition-colors px-1"
-            >
-              Άκυρο
-            </button>
-            <button
-              onClick={() => { setDeleting(true); onDelete(reservation.id) }}
-              disabled={deleting}
-              className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors px-1"
-            >
-              {deleting ? '…' : 'Διαγραφή'}
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={onStartEdit}
-              className="text-gray-500 hover:text-white transition-colors p-1"
-              aria-label="Edit booking"
-            >
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M9.5 2.5l2 2M2 10l.5 1.5L4 11l7-7-2-2-7 7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            <button
-              onClick={() => setConfirming(true)}
-              className="text-gray-500 hover:text-red-400 transition-colors p-1 -mr-1"
-              aria-label="Delete booking"
-            >
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M5.5 6v4M8.5 6v4M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          </>
-        )}
-      </div>
+      </button>
+      <button
+        onClick={() => setConfirming(true)}
+        className="absolute top-1/2 -translate-y-1/2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-400 p-1"
+        aria-label="Delete booking"
+      >
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+          <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M5.5 6v4M8.5 6v4M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
     </div>
   )
 }
