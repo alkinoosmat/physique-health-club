@@ -12,7 +12,11 @@ import CancelModal from '@/components/CancelModal'
 import SuccessBanner from '@/components/SuccessBanner'
 
 export default function Home() {
-  const today = toLocalISODate(new Date())
+  // If today is Sunday, default to Monday
+  const todayDate = new Date()
+  const firstAvailable = new Date(todayDate)
+  if (firstAvailable.getDay() === 0) firstAvailable.setDate(firstAvailable.getDate() + 1)
+  const today = toLocalISODate(firstAvailable)
   const [selectedDate, setSelectedDate] = useState(today)
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -126,6 +130,7 @@ export default function Home() {
             maxPerSlot={MAX_PER_SLOT}
             onSelectSlot={setSelectedSlot}
             loading={loading}
+            selectedDate={selectedDate}
           />
         </div>
 

@@ -1,15 +1,16 @@
 'use client'
 
-import { TIME_SLOTS, formatTime, getEndTime } from '@/lib/utils'
+import { TIME_SLOTS, formatTime, getEndTime, isSlotPast } from '@/lib/utils'
 
 interface TimeSlotGridProps {
   slotCounts: Record<string, number>
   maxPerSlot: number
   onSelectSlot: (slot: string) => void
   loading: boolean
+  selectedDate: string
 }
 
-export default function TimeSlotGrid({ slotCounts, maxPerSlot, onSelectSlot, loading }: TimeSlotGridProps) {
+export default function TimeSlotGrid({ slotCounts, maxPerSlot, onSelectSlot, loading, selectedDate }: TimeSlotGridProps) {
   if (loading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -26,31 +27,35 @@ export default function TimeSlotGrid({ slotCounts, maxPerSlot, onSelectSlot, loa
         const count = slotCounts[slot] || 0
         const remaining = maxPerSlot - count
         const isFull = remaining <= 0
-        const isAlmostFull = remaining <= 2 && remaining > 0
+        const isPast = isSlotPast(selectedDate, slot)
+        const isUnavailable = isFull || isPast
+        const isAlmostFull = remaining <= 2 && remaining > 0 && !isPast
         const endTime = getEndTime(slot)
 
         return (
           <button
             key={slot}
-            disabled={isFull}
-            onClick={() => !isFull && onSelectSlot(slot)}
+            disabled={isUnavailable}
+            onClick={() => !isUnavailable && onSelectSlot(slot)}
             className={`
               relative h-20 rounded-xl border text-left px-4 py-3 transition-all duration-200
-              ${isFull
+              ${isUnavailable
                 ? 'border-gray-100 bg-gray-50 cursor-not-allowed'
                 : 'border-gray-200 bg-white hover:border-black cursor-pointer group'
               }
             `}
           >
-            <div className={`text-base font-semibold tracking-tight ${isFull ? 'text-gray-300' : 'text-black'}`}>
+            <div className={`text-base font-semibold tracking-tight ${isUnavailable ? 'text-gray-300' : 'text-black'}`}>
               {formatTime(slot)}
             </div>
-            <div className={`text-xs mt-0.5 ${isFull ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-600'}`}>
+            <div className={`text-xs mt-0.5 ${isUnavailable ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-600'}`}>
               έως {formatTime(endTime)}
             </div>
 
             <div className="absolute top-3 right-3">
-              {isFull ? (
+              {isPast && !isFull ? (
+                <span className="text-xs text-gray-300 font-medium">Παρελθόν</span>
+              ) : isFull ? (
                 <span className="text-xs text-gray-300 font-medium">Πλήρες</span>
               ) : isAlmostFull ? (
                 <span className="text-xs text-amber-500 font-semibold">{remaining} θέσεις</span>

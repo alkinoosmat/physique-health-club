@@ -33,6 +33,19 @@ export function formatDate(dateStr: string): string {
   })
 }
 
+export function isSlotPast(dateIso: string, slot: string): boolean {
+  const now = new Date()
+  const [year, month, day] = dateIso.split('-').map(Number)
+  const [hour, minute] = slot.split(':').map(Number)
+  const slotTime = new Date(year, month - 1, day, hour, minute)
+  return slotTime <= now
+}
+
+export function isSunday(dateIso: string): boolean {
+  const [year, month, day] = dateIso.split('-').map(Number)
+  return new Date(year, month - 1, day).getDay() === 0
+}
+
 export function toLocalISODate(date: Date): string {
   const year = date.getFullYear()
   const month = (date.getMonth() + 1).toString().padStart(2, '0')

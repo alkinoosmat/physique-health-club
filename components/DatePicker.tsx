@@ -11,15 +11,19 @@ export default function DatePicker({ selectedDate, onSelectDate }: DatePickerPro
   const today = new Date()
   const days: { date: Date; label: string; iso: string }[] = []
 
-  for (let i = 0; i < 14; i++) {
+  // Show 14 non-Sunday days (gym is closed on Sundays)
+  let added = 0
+  for (let i = 0; added < 14; i++) {
     const d = new Date(today)
     d.setDate(today.getDate() + i)
-    const iso = toLocalISODate(d)
-    days.push({
-      date: d,
-      label: d.toLocaleDateString('el-GR', { weekday: 'short' }),
-      iso,
-    })
+    if (d.getDay() !== 0) {
+      days.push({
+        date: d,
+        label: d.toLocaleDateString('el-GR', { weekday: 'short' }),
+        iso: toLocalISODate(d),
+      })
+      added++
+    }
   }
 
   return (
