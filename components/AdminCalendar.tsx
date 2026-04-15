@@ -64,8 +64,44 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
     ? currentDate.toLocaleDateString('el-GR', { weekday: 'long', month: 'long', day: 'numeric' })
     : `${weekStart.toLocaleDateString('el-GR', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('el-GR', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
+  const editingReservation = editingId ? reservations.find(r => r.id === editingId) ?? null : null
+
   return (
     <div className="space-y-4">
+      {/* Edit Modal */}
+      {editingReservation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          onClick={() => setEditingId(null)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold">Επεξεργασία κράτησης</h2>
+              <button
+                onClick={() => setEditingId(null)}
+                className="w-8 h-8 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-black hover:border-black transition-all"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <AdminEditForm
+              reservation={editingReservation}
+              onConfirm={async (fields) => {
+                await onEdit(editingReservation.id, fields)
+                setEditingId(null)
+              }}
+              onCancel={() => setEditingId(null)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="space-y-2">
         {/* Row 1: view toggle + today */}
@@ -141,9 +177,7 @@ export default function AdminCalendar({ reservations, onDelete, onBook, onEdit }
           todayIso={todayIso}
           getReservationsForDate={getReservationsForDate}
           onDelete={onDelete}
-          onEdit={onEdit}
           onSelectDay={(d) => { setCurrentDate(d); setViewMode('day') }}
-          editingId={editingId}
           onEditingIdChange={setEditingId}
         />
       )}
@@ -215,10 +249,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
                         key={r.id}
                         reservation={r}
                         onDelete={onDelete}
-                        onEdit={onEdit}
-                        isEditing={editingId === r.id}
                         onStartEdit={() => onEditingIdChange(r.id)}
-                        onStopEdit={() => onEditingIdChange(null)}
                       />
                     ))}
 
@@ -329,29 +360,13 @@ function AdminBookingForm({ slot, onConfirm, onCancel }: {
   )
 }
 
-function DayReservationCard({ reservation, onDelete, onEdit, isEditing, onStartEdit, onStopEdit }: {
+function DayReservationCard({ reservation, onDelete, onStartEdit }: {
   reservation: Reservation
   onDelete: (id: string) => void
-  onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
-  isEditing: boolean
   onStartEdit: () => void
-  onStopEdit: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
-
-  if (isEditing) {
-    return (
-      <AdminEditForm
-        reservation={reservation}
-        onConfirm={async (fields) => {
-          await onEdit(reservation.id, fields)
-          onStopEdit()
-        }}
-        onCancel={onStopEdit}
-      />
-    )
-  }
 
   return (
     <div className={`rounded-xl border bg-black text-white flex items-center justify-between px-3 py-2.5 transition-all ${confirming ? 'border-red-500' : 'border-gray-900'}`}>
@@ -523,14 +538,12 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
 
 // ─── Week View ───────────────────────────────────────────────────────────────
 
-function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit, onSelectDay, editingId, onEditingIdChange }: {
+function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSelectDay, onEditingIdChange }: {
   weekDays: Date[]
   todayIso: string
   getReservationsForDate: (iso: string) => Reservation[]
   onDelete: (id: string) => void
-  onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
   onSelectDay: (d: Date) => void
-  editingId: string | null
   onEditingIdChange: (id: string | null) => void
 }) {
   // Only show slots that have at least one booking across the week, for a cleaner view
@@ -578,7 +591,7 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
               {totalBookings > 0 && (
                 <div className="px-4 py-3 space-y-1.5">
                   {dayReservations.map(r => (
-                    <MobileWeekCard key={r.id} reservation={r} onDelete={onDelete} onEdit={onEdit} />
+                    <MobileWeekCard key={r.id} reservation={r} onDelete={onDelete} onStartEdit={() => onEditingIdChange(r.id)} />
                   ))}
                 </div>
               )}
@@ -650,31 +663,22 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
                         </div>
                       ) : (
                         cellReservations.map(r => (
-                          editingId === r.id ? (
-                            <AdminEditForm
-                              key={r.id}
-                              reservation={r}
-                              onConfirm={async (fields) => { await onEdit(r.id, fields); onEditingIdChange(null) }}
-                              onCancel={() => onEditingIdChange(null)}
-                            />
-                          ) : (
-                            <div key={r.id} className="relative rounded-lg bg-black text-white group">
-                              <button
-                                onClick={() => onEditingIdChange(r.id)}
-                                className="w-full text-left px-2 py-1.5"
-                              >
-                                <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
-                              </button>
-                              <button
-                                onClick={() => onDelete(r.id)}
-                                className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-400 p-0.5"
-                              >
-                                <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-                                  <path d="M2 3.5h10M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-                                </svg>
-                              </button>
-                            </div>
-                          )
+                          <div key={r.id} className="relative rounded-lg bg-black text-white group">
+                            <button
+                              onClick={() => onEditingIdChange(r.id)}
+                              className="w-full text-left px-2 py-1.5"
+                            >
+                              <span className="text-[11px] font-medium block w-full truncate">{r.name}</span>
+                            </button>
+                            <button
+                              onClick={() => onDelete(r.id)}
+                              className="absolute top-1/2 -translate-y-1/2 right-1 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-400 p-0.5"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+                                <path d="M2 3.5h10M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                              </svg>
+                            </button>
+                          </div>
                         ))
                       )}
                     </div>
@@ -689,44 +693,34 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onEdit
   )
 }
 
-function MobileWeekCard({ reservation, onDelete, onEdit }: {
+function MobileWeekCard({ reservation, onDelete, onStartEdit }: {
   reservation: Reservation
   onDelete: (id: string) => void
-  onEdit: (id: string, fields: { name: string; phone: string; date: string; start_time: string; end_time: string }) => Promise<void>
+  onStartEdit: () => void
 }) {
-  const [mode, setMode] = useState<'view' | 'edit' | 'confirm-delete'>('view')
-
-  if (mode === 'edit') {
-    return (
-      <AdminEditForm
-        reservation={reservation}
-        onConfirm={async (fields) => { await onEdit(reservation.id, fields); setMode('view') }}
-        onCancel={() => setMode('view')}
-      />
-    )
-  }
+  const [confirming, setConfirming] = useState(false)
 
   return (
-    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${mode === 'confirm-delete' ? 'bg-red-50 border-red-200' : 'bg-black border-gray-900'}`}>
+    <div className={`flex items-center justify-between rounded-xl px-3 py-2 border transition-all ${confirming ? 'bg-red-50 border-red-200' : 'bg-black border-gray-900'}`}>
       <div className="flex items-center gap-2 min-w-0">
-        <span className={`text-xs font-medium truncate ${mode === 'confirm-delete' ? 'text-red-700' : 'text-white'}`}>{reservation.name}</span>
-        <span className={`text-xs flex-shrink-0 ${mode === 'confirm-delete' ? 'text-red-400' : 'text-gray-400'}`}>
+        <span className={`text-xs font-medium truncate ${confirming ? 'text-red-700' : 'text-white'}`}>{reservation.name}</span>
+        <span className={`text-xs flex-shrink-0 ${confirming ? 'text-red-400' : 'text-gray-400'}`}>
           {formatTime(reservation.start_time.slice(0, 5))}
         </span>
       </div>
-      {mode === 'confirm-delete' ? (
+      {confirming ? (
         <div className="flex gap-2 flex-shrink-0 ml-2">
-          <button onClick={() => setMode('view')} className="text-xs text-gray-500 font-medium">Άκυρο</button>
+          <button onClick={() => setConfirming(false)} className="text-xs text-gray-500 font-medium">Άκυρο</button>
           <button onClick={() => onDelete(reservation.id)} className="text-xs text-red-600 font-semibold">Διαγραφή</button>
         </div>
       ) : (
         <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
-          <button onClick={() => setMode('edit')} className="text-gray-500 hover:text-white transition-colors p-1">
+          <button onClick={onStartEdit} className="text-gray-500 hover:text-white transition-colors p-1">
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
               <path d="M9.5 2.5l2 2M2 10l.5 1.5L4 11l7-7-2-2-7 7z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <button onClick={() => setMode('confirm-delete')} className="text-gray-500 hover:text-red-400 transition-colors p-1">
+          <button onClick={() => setConfirming(true)} className="text-gray-500 hover:text-red-400 transition-colors p-1">
             <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
               <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
