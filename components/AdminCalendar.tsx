@@ -170,6 +170,12 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
 
+  // Always-fresh refs for use inside touch handlers (avoids stale closures)
+  const reservationsRef = useRef(reservations)
+  reservationsRef.current = reservations
+  const onEditRef = useRef(onEdit)
+  onEditRef.current = onEdit
+
   // Touch drag state
   const ghostRef = useRef<HTMLDivElement | null>(null)
   const touchDraggingId = useRef<string | null>(null)
@@ -193,12 +199,12 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
   }
 
   function commitMove(id: string, targetSlot: string) {
-    const reservation = reservations.find(r => r.id === id)
+    const reservation = reservationsRef.current.find(r => r.id === id)
     if (!reservation) return
     if (reservation.start_time.slice(0, 5) === targetSlot) return
     const [h] = targetSlot.split(':').map(Number)
     const endTime = `${(h + 1).toString().padStart(2, '0')}:00`
-    onEdit(id, {
+    onEditRef.current(id, {
       name: reservation.name,
       phone: reservation.phone,
       date: reservation.date,
@@ -301,8 +307,7 @@ function DayView({ dateIso, reservations, onDelete, onBook, onEdit, editingId, o
     if (targetSlot && id) {
       commitMove(id, targetSlot)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reservations, onEdit])
+  }, [])
 
   return (
     <div>
