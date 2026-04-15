@@ -10,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Physique Health Club",
-  description: "Premium gym reservation system for Physique Health Club",
+  description: "Σύστημα κρατήσεων γυμναστηρίου Physique Health Club",
 };
 
 export default function RootLayout({
@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html lang="el" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-white text-black font-sans">
         {children}
       </body>

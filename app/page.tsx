@@ -69,13 +69,13 @@ export default function Home() {
                 <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
                   <div className="w-2 h-2 bg-white rounded-full" />
                 </div>
-                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Health Club</span>
+                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Γυμναστήριο</span>
               </div>
               <h1 className="text-5xl sm:text-6xl font-black tracking-tight leading-none text-black">
                 Physique
               </h1>
               <p className="text-gray-400 mt-3 text-base font-light tracking-wide">
-                Reserve your session. Train at your best.
+                Κράτησε τη θέση σου. Προπονήσου στο καλύτερό σου.
               </p>
             </div>
 
@@ -86,7 +86,7 @@ export default function Home() {
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M7 1v6M4 4l3-3 3 3M2 9.5A2.5 2.5 0 004.5 12h5A2.5 2.5 0 0012 9.5V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              Cancel Booking
+              Ακύρωση Κράτησης
             </button>
           </div>
         </div>
@@ -98,7 +98,7 @@ export default function Home() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Choose a Date</h2>
+              <h2 className="text-xl font-bold tracking-tight">Επέλεξε Ημέρα</h2>
               <p className="text-sm text-gray-400 mt-0.5">{formatDate(selectedDate)}</p>
             </div>
           </div>
@@ -108,15 +108,15 @@ export default function Home() {
         {/* Slots */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold tracking-tight">Available Slots</h2>
+            <h2 className="text-xl font-bold tracking-tight">Διαθέσιμες Ώρες</h2>
             <div className="flex items-center gap-4 text-xs text-gray-400">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-white border border-gray-300" />
-                Available
+                Διαθέσιμο
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-sm bg-gray-100" />
-                Booked
+                Κλειστό
               </div>
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function Home() {
             onClick={() => setShowCancelModal(true)}
             className="w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-black hover:text-black transition-all"
           >
-            Cancel a Booking
+            Ακύρωση Κράτησης
           </button>
         </div>
 
@@ -146,7 +146,7 @@ export default function Home() {
             href="/admin"
             className="text-xs text-gray-300 hover:text-black transition-colors"
           >
-            Admin →
+            Διαχείριση →
           </a>
         </div>
       </div>

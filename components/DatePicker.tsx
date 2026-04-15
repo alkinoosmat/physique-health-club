@@ -17,7 +17,7 @@ export default function DatePicker({ selectedDate, onSelectDate }: DatePickerPro
     const iso = toLocalISODate(d)
     days.push({
       date: d,
-      label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      label: d.toLocaleDateString('el-GR', { weekday: 'short' }),
       iso,
     })
   }

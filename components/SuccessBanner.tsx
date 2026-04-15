@@ -24,7 +24,7 @@ export default function SuccessBanner({ reservation, onDismiss }: SuccessBannerP
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">Booking Confirmed!</p>
+          <p className="font-semibold text-sm">Η Κράτηση Επιβεβαιώθηκε!</p>
           <p className="text-xs text-gray-300 mt-0.5">
             {reservation.name} · {formatDate(reservation.date)}
           </p>

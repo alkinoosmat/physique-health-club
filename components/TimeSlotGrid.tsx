@@ -46,14 +46,14 @@ export default function TimeSlotGrid({ slotCounts, maxPerSlot, onSelectSlot, loa
               {formatTime(slot)}
             </div>
             <div className={`text-xs mt-0.5 ${isFull ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-600'}`}>
-              until {formatTime(endTime)}
+              έως {formatTime(endTime)}
             </div>
 
             <div className="absolute top-3 right-3">
               {isFull ? (
-                <span className="text-xs text-gray-300 font-medium">Full</span>
+                <span className="text-xs text-gray-300 font-medium">Πλήρες</span>
               ) : isAlmostFull ? (
-                <span className="text-xs text-amber-500 font-semibold">{remaining} left</span>
+                <span className="text-xs text-amber-500 font-semibold">{remaining} θέσεις</span>
               ) : (
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="w-5 h-5 rounded-full bg-black flex items-center justify-center">

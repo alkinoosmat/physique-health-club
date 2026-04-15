@@ -38,13 +38,13 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
       if (fetchError) throw fetchError
 
       if (!data || data.length === 0) {
-        setError('No upcoming reservations found for this phone number.')
+        setError('Δεν βρέθηκαν κρατήσεις για αυτόν τον αριθμό τηλεφώνου.')
       } else {
         setReservations(data)
         setStep('found')
       }
     } catch {
-      setError('Something went wrong. Please try again.')
+      setError('Κάτι πήγε στραβά. Παρακαλώ δοκίμασε ξανά.')
     } finally {
       setLoading(false)
     }
@@ -52,7 +52,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
 
   async function handleCancel(reservation: Reservation) {
     if (!canCancel(reservation.date, reservation.start_time.slice(0, 5))) {
-      setError(`Cannot cancel "${reservation.name}'s" booking — less than 2 hours before the session.`)
+      setError(`Δεν είναι δυνατή η ακύρωση — απομένουν λιγότερο από 2 ώρες.`)
       return
     }
 
@@ -67,7 +67,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
 
       if (deleteError) throw deleteError
 
-      setSuccessMsg(`Booking cancelled successfully.`)
+      setSuccessMsg(`Η κράτηση ακυρώθηκε επιτυχώς.`)
       setReservations(prev => prev.filter(r => r.id !== reservation.id))
       onSuccess(reservation.id)
 
@@ -75,7 +75,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
         setTimeout(() => onClose(), 1500)
       }
     } catch {
-      setError('Could not cancel booking. Please try again.')
+      setError('Αδυναμία ακύρωσης. Παρακαλώ δοκίμασε ξανά.')
     } finally {
       setCancellingId(null)
     }
@@ -91,8 +91,8 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold tracking-tight">Cancel Booking</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Look up by phone number</p>
+            <h2 className="text-xl font-bold tracking-tight">Ακύρωση Κράτησης</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Αναζήτηση με αριθμό τηλεφώνου</p>
           </div>
           <button
             onClick={onClose}
@@ -109,13 +109,13 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
             <form onSubmit={handleLookup} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Phone Number
+                  Τηλέφωνο
                 </label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="69X XXX XXXX"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
                   required
                 />
@@ -133,14 +133,14 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
                   onClick={onClose}
                   className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-gray-400 hover:text-black transition-all"
                 >
-                  Back
+                  Πίσω
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
                   className="flex-1 py-3 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black hover:border-black border border-black transition-all disabled:opacity-50"
                 >
-                  {loading ? 'Looking up...' : 'Find Reservations'}
+                  {loading ? 'Αναζήτηση...' : 'Εύρεση Κρατήσεων'}
                 </button>
               </div>
             </form>
@@ -160,7 +160,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
               )}
 
               {reservations.length === 0 && !successMsg && (
-                <p className="text-sm text-gray-500 text-center py-4">No reservations remaining.</p>
+                <p className="text-sm text-gray-500 text-center py-4">Δεν υπάρχουν υπόλοιπες κρατήσεις.</p>
               )}
 
               {reservations.map((r) => {
@@ -173,7 +173,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
                         {formatDate(r.date)} · {formatTime(r.start_time.slice(0, 5))} – {formatTime(r.end_time.slice(0, 5))}
                       </p>
                       {!cancelable && (
-                        <p className="text-xs text-amber-600 mt-0.5">Less than 2h — cannot cancel</p>
+                        <p className="text-xs text-amber-600 mt-0.5">Λιγότερο από 2ω — δεν επιτρέπεται ακύρωση</p>
                       )}
                     </div>
                     <button
@@ -181,7 +181,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
                       disabled={!cancelable || cancellingId === r.id}
                       className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {cancellingId === r.id ? 'Cancelling...' : 'Cancel'}
+                      {cancellingId === r.id ? 'Ακύρωση...' : 'Ακύρωση'}
                     </button>
                   </div>
                 )
@@ -191,7 +191,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
                 onClick={() => { setStep('lookup'); setPhone(''); setError(''); setSuccessMsg(''); setReservations([]) }}
                 className="w-full py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-gray-400 hover:text-black transition-all mt-2"
               >
-                Search Again
+                Νέα Αναζήτηση
               </button>
             </div>
           )}

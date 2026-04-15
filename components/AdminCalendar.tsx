@@ -59,7 +59,7 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
 
   const periodLabel = viewMode === 'day'
     ? currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    : `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : `${weekStart.toLocaleDateString('el-GR', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('el-GR', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   return (
     <div className="space-y-4">
@@ -79,7 +79,7 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
           <div className="flex-1 text-center">
             <p className="text-sm font-semibold truncate">{periodLabel}</p>
             {viewMode === 'day' && currentIso === todayIso && (
-              <p className="text-xs text-gray-400">Today</p>
+              <p className="text-xs text-gray-400">Σήμερα</p>
             )}
           </div>
 
@@ -99,20 +99,20 @@ export default function AdminCalendar({ reservations, onDelete }: AdminCalendarP
             onClick={() => { setCurrentDate(new Date()); setViewMode('day') }}
             className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:border-black hover:text-black transition-all"
           >
-            Today
+            Σήμερα
           </button>
           <div className="flex rounded-xl border border-gray-200 overflow-hidden flex-1 sm:flex-none">
             <button
               onClick={() => setViewMode('day')}
               className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-all ${viewMode === 'day' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:text-black'}`}
             >
-              Day
+              Ημέρα
             </button>
             <button
               onClick={() => setViewMode('week')}
               className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-all ${viewMode === 'week' ? 'bg-black text-white' : 'bg-white text-gray-600 hover:text-black'}`}
             >
-              Week
+              Εβδομάδα
             </button>
           </div>
         </div>
@@ -163,7 +163,7 @@ function DayView({ dateIso, reservations, onDelete }: {
       {/* Day summary */}
       <div className="flex items-center justify-between mb-3 px-1">
         <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">
-          {totalBookings === 0 ? 'No bookings' : `${totalBookings} booking${totalBookings !== 1 ? 's' : ''}`}
+          {totalBookings === 0 ? 'Καμία κράτηση' : `${totalBookings} κράτηση${totalBookings !== 1 ? 'εις' : ''}`}
         </p>
         <p className="text-xs text-gray-400">{formatDate(dateIso)}</p>
       </div>
@@ -239,14 +239,14 @@ function DayReservationCard({ reservation, onDelete }: { reservation: Reservatio
               onClick={() => setConfirming(false)}
               className="text-xs text-gray-400 hover:text-white transition-colors px-1"
             >
-              Keep
+              Κράτηση
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
               className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors px-1"
             >
-              {deleting ? '…' : 'Delete'}
+              {deleting ? '…' : 'Διαγραφή'}
             </button>
           </>
         ) : (
@@ -294,17 +294,17 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
                 <div className="flex items-center gap-3">
                   <div>
                     <p className={`text-sm font-bold ${isToday ? 'text-white' : 'text-black'}`}>
-                      {day.toLocaleDateString('en-US', { weekday: 'long' })}
+                      {day.toLocaleDateString('el-GR', { weekday: 'long' })}
                     </p>
                     <p className={`text-xs ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
-                      {day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {day.toLocaleDateString('el-GR', { month: 'short', day: 'numeric' })}
                     </p>
                   </div>
-                  {isToday && <span className="text-xs bg-white text-black font-semibold px-2 py-0.5 rounded-full">Today</span>}
+                  {isToday && <span className="text-xs bg-white text-black font-semibold px-2 py-0.5 rounded-full">Σήμερα</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-medium ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
-                    {totalBookings === 0 ? 'No bookings' : `${totalBookings} booking${totalBookings !== 1 ? 's' : ''}`}
+                    {totalBookings === 0 ? 'Καμία κράτηση' : `${totalBookings} κράτηση${totalBookings !== 1 ? 'εις' : ''}`}
                   </span>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className={isToday ? 'text-gray-400' : 'text-gray-300'}>
                     <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -323,7 +323,7 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
                       onClick={() => onSelectDay(day)}
                       className="text-xs text-gray-400 hover:text-black transition-colors py-1"
                     >
-                      +{totalBookings - 3} more — tap to view all
+                      +{totalBookings - 3} ακόμα — πάτα για να δεις όλες
                     </button>
                   )}
                 </div>
@@ -346,11 +346,11 @@ function WeekView({ weekDays, todayIso, getReservationsForDate, onDelete, onSele
                 onClick={() => onSelectDay(day)}
                 className={`w-full text-center mb-2 py-2 px-1 rounded-xl text-xs font-medium transition-all hover:opacity-80 ${isToday ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-50 border border-gray-100'}`}
               >
-                <div className="uppercase tracking-wide text-[10px]">{day.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+                <div className="uppercase tracking-wide text-[10px]">{day.toLocaleDateString('el-GR', { weekday: 'short' })}</div>
                 <div className="text-lg font-bold mt-0.5">{day.getDate()}</div>
                 {dayReservations.length > 0 && (
                   <div className={`text-[10px] mt-0.5 ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
-                    {dayReservations.length} booked
+                    {dayReservations.length} κρατήσεις
                   </div>
                 )}
               </button>
@@ -393,8 +393,8 @@ function MobileWeekCard({ reservation, onDelete }: { reservation: Reservation; o
       </div>
       {confirming ? (
         <div className="flex gap-2 flex-shrink-0 ml-2">
-          <button onClick={() => setConfirming(false)} className="text-xs text-gray-500 font-medium">Keep</button>
-          <button onClick={() => onDelete(reservation.id)} className="text-xs text-red-600 font-semibold">Delete</button>
+          <button onClick={() => setConfirming(false)} className="text-xs text-gray-500 font-medium">Όχι</button>
+          <button onClick={() => onDelete(reservation.id)} className="text-xs text-red-600 font-semibold">Διαγραφή</button>
         </div>
       ) : (
         <button onClick={() => setConfirming(true)} className="text-gray-500 hover:text-red-400 transition-colors p-1 flex-shrink-0 ml-1">
@@ -417,7 +417,7 @@ function DesktopWeekCard({ reservation, onDelete }: { reservation: Reservation; 
         {confirming ? (
           <div className="flex gap-1 flex-shrink-0">
             <button onClick={() => setConfirming(false)} className="text-[10px] text-gray-500">✕</button>
-            <button onClick={() => onDelete(reservation.id)} className="text-[10px] text-red-500 font-bold">Del</button>
+            <button onClick={() => onDelete(reservation.id)} className="text-[10px] text-red-500 font-bold">Διαγρ.</button>
           </div>
         ) : (
           <button onClick={() => setConfirming(true)} className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0">

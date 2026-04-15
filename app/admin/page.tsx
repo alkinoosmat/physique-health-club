@@ -36,7 +36,7 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
               <path d="M7 9V6a3 3 0 016 0v3" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-black tracking-tight">Admin Access</h1>
+          <h1 className="text-2xl font-black tracking-tight">Πρόσβαση Διαχείρισης</h1>
           <p className="text-sm text-gray-400 mt-1">Physique Health Club</p>
         </div>
 
@@ -45,20 +45,20 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
             type="password"
             value={input}
             onChange={(e) => { setInput(e.target.value); setError(false) }}
-            placeholder="Enter password"
+            placeholder="Κωδικός πρόσβασης"
             autoFocus
             className={`w-full px-4 py-3 rounded-xl border text-sm focus:outline-none transition-colors placeholder:text-gray-300 ${
               error ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-black'
             }`}
           />
           {error && (
-            <p className="text-xs text-red-500 text-center">Incorrect password. Try again.</p>
+            <p className="text-xs text-red-500 text-center">Λάθος κωδικός. Δοκίμασε ξανά.</p>
           )}
           <button
             type="submit"
             className="w-full py-3 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all"
           >
-            Unlock Dashboard
+            Είσοδος
           </button>
         </form>
       </div>
@@ -88,7 +88,7 @@ export default function AdminPage() {
       .order('start_time', { ascending: true })
 
     if (fetchError) {
-      setError('Failed to load reservations.')
+      setError('Αποτυχία φόρτωσης κρατήσεων.')
     } else {
       setReservations(data || [])
     }
@@ -148,9 +148,9 @@ export default function AdminPage() {
                   <div className="w-5 h-5 bg-black rounded-full flex items-center justify-center">
                     <div className="w-1.5 h-1.5 bg-white rounded-full" />
                   </div>
-                  <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Admin</span>
+                  <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Διαχείριση</span>
                 </div>
-                <h1 className="text-2xl font-black tracking-tight mt-0.5">Physique Dashboard</h1>
+                <h1 className="text-2xl font-black tracking-tight mt-0.5">Πίνακας Διαχείρισης</h1>
               </div>
             </div>
 
@@ -162,7 +162,7 @@ export default function AdminPage() {
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M1 7a6 6 0 1010.9-3.4M11 1v3H8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                Refresh
+                Ανανέωση
               </button>
               <button
                 onClick={() => { sessionStorage.removeItem('admin_unlocked'); setUnlocked(false) }}
@@ -171,7 +171,7 @@ export default function AdminPage() {
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <path d="M9 2h3a1 1 0 011 1v8a1 1 0 01-1 1H9M6 10l4-3-4-3M1 7h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                Lock
+                Αποσύνδεση
               </button>
             </div>
           </div>
@@ -183,15 +183,15 @@ export default function AdminPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
           <div className="px-5 py-4 rounded-xl border border-gray-200">
             <div className="text-3xl font-black">{totalToday}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Today's Bookings</div>
+            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Κρατήσεις Σήμερα</div>
           </div>
           <div className="px-5 py-4 rounded-xl border border-gray-200">
             <div className="text-3xl font-black">{totalUpcoming}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Upcoming</div>
+            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Προσεχείς</div>
           </div>
           <div className="px-5 py-4 rounded-xl border border-gray-200 col-span-2 sm:col-span-1">
             <div className="text-3xl font-black">{reservations.length}</div>
-            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">All Time</div>
+            <div className="text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide">Σύνολο</div>
           </div>
         </div>
 

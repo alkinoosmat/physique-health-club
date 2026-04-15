@@ -19,15 +19,13 @@ export function canCancel(date: string, startTime: string): boolean {
 
 export function formatTime(time: string): string {
   const [hours, minutes] = time.split(':').map(Number)
-  const period = hours >= 12 ? 'PM' : 'AM'
-  const displayHour = hours % 12 || 12
-  return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
 }
 
 export function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString('el-GR', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',

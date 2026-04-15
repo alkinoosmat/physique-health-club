@@ -22,7 +22,7 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) {
-      setError('Please fill in all fields.')
+      setError('Παρακαλώ συμπλήρωσε όλα τα πεδία.')
       return
     }
 
@@ -38,7 +38,7 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
         .eq('start_time', `${slot}:00`)
 
       if ((count ?? 0) >= 7) {
-        setError('This slot just filled up. Please choose another.')
+        setError('Αυτή η ώρα μόλις γέμισε. Παρακαλώ επέλεξε άλλη.')
         setLoading(false)
         return
       }
@@ -59,7 +59,7 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
 
       onSuccess(data)
     } catch {
-      setError('Something went wrong. Please try again.')
+      setError('Κάτι πήγε στραβά. Παρακαλώ δοκίμασε ξανά.')
     } finally {
       setLoading(false)
     }
@@ -75,7 +75,7 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold tracking-tight">Book a Slot</h2>
+            <h2 className="text-xl font-bold tracking-tight">Κράτηση Ώρας</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               {formatDate(date)} · {formatTime(slot)} – {formatTime(endTime)}
             </p>
@@ -94,13 +94,13 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Full Name
+              Ονοματεπώνυμο
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="John Smith"
+              placeholder="Γιάννης Παπαδόπουλος"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
               required
             />
@@ -108,13 +108,13 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Phone Number
+              Τηλέφωνο
             </label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 (555) 000-0000"
+              placeholder="69X XXX XXXX"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors placeholder:text-gray-300"
               required
             />
@@ -132,14 +132,14 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
               onClick={onClose}
               className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:border-gray-400 hover:text-black transition-all"
             >
-              Cancel
+              Άκυρο
             </button>
             <button
               type="submit"
               disabled={loading}
               className="flex-1 py-3 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black hover:border-black border border-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Confirming...' : 'Confirm Booking'}
+              {loading ? 'Επιβεβαίωση...' : 'Επιβεβαίωση Κράτησης'}
             </button>
           </div>
         </form>
