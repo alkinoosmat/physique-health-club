@@ -3,8 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, Reservation } from '@/lib/supabase'
+import { supabase, Reservation, Customer } from '@/lib/supabase'
 import AdminCalendar from '@/components/AdminCalendar'
+import CustomersTab from '@/components/CustomersTab'
 import { toLocalISODate } from '@/lib/utils'
 
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
@@ -82,8 +83,10 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
 export default function AdminPage() {
   const [unlocked, setUnlocked] = useState(false)
   const [reservations, setReservations] = useState<Reservation[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState<'calendar' | 'customers'>('calendar')
 
   useEffect(() => {
     if (sessionStorage.getItem('admin_unlocked') === '1') {
@@ -94,16 +97,16 @@ export default function AdminPage() {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     setError('')
-    const { data, error: fetchError } = await supabase
-      .from('reservations')
-      .select('*')
-      .order('date', { ascending: true })
-      .order('start_time', { ascending: true })
+    const [{ data: resData, error: resError }, { data: custData, error: custError }] = await Promise.all([
+      supabase.from('reservations').select('*').order('date', { ascending: true }).order('start_time', { ascending: true }),
+      supabase.from('customers').select('*').order('name', { ascending: true }),
+    ])
 
-    if (fetchError) {
-      setError('Αποτυχία φόρτωσης κρατήσεων.')
+    if (resError || custError) {
+      setError('Αποτυχία φόρτωσης δεδομένων.')
     } else {
-      setReservations(data || [])
+      setReservations(resData || [])
+      setCustomers(custData || [])
     }
     setLoading(false)
   }, [])
@@ -138,21 +141,61 @@ export default function AdminPage() {
     const [startHour] = slot.split(':').map(Number)
     const endHour = startHour + 1
     const endTime = `${endHour.toString().padStart(2, '0')}:00`
+    const normalizedPhone = phone.trim() || '-'
+
+    // Find or create customer by phone
+    let customerId: string | null = null
+    if (normalizedPhone !== '-') {
+      const existing = customers.find(c => c.phone === normalizedPhone)
+      if (existing) {
+        customerId = existing.id
+      } else {
+        const { data: newCustomer } = await supabase
+          .from('customers')
+          .insert({ name: name.trim(), phone: normalizedPhone })
+          .select()
+          .single()
+        if (newCustomer) {
+          customerId = newCustomer.id
+          setCustomers(prev => [...prev, newCustomer].sort((a, b) => a.name.localeCompare(b.name)))
+        }
+      }
+    }
 
     const { data, error: insertError } = await supabase
       .from('reservations')
       .insert({
-        name,
-        phone: phone || '-',
+        name: name.trim(),
+        phone: normalizedPhone,
         date,
         start_time: slot,
         end_time: endTime,
+        customer_id: customerId,
       })
       .select()
       .single()
 
     if (!insertError && data) {
       setReservations(prev => [...prev, data])
+    }
+  }
+
+  async function handleDeleteCustomer(id: string) {
+    const { error: deleteError } = await supabase.from('customers').delete().eq('id', id)
+    if (!deleteError) {
+      setCustomers(prev => prev.filter(c => c.id !== id))
+      // unlink reservations locally
+      setReservations(prev => prev.map(r => r.customer_id === id ? { ...r, customer_id: null } : r))
+    }
+  }
+
+  async function handleToggleNoShow(reservationId: string, value: boolean) {
+    const { error: updateError } = await supabase
+      .from('reservations')
+      .update({ no_show: value })
+      .eq('id', reservationId)
+    if (!updateError) {
+      setReservations(prev => prev.map(r => r.id === reservationId ? { ...r, no_show: value } : r))
     }
   }
 
@@ -167,7 +210,6 @@ export default function AdminPage() {
       {/* Header */}
       <div className="border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
-          {/* Top row: back + title + icon buttons */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3 min-w-0">
               <a
@@ -189,7 +231,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Icon-only on mobile, full buttons on desktop */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={fetchAll}
@@ -218,7 +259,7 @@ export default function AdminPage() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="px-3 sm:px-5 py-3 sm:py-4 rounded-xl border border-gray-200">
             <div className="text-2xl sm:text-3xl font-black">{totalToday}</div>
             <div className="text-[10px] sm:text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide leading-tight">Σήμερα</div>
@@ -231,6 +272,10 @@ export default function AdminPage() {
             <div className="text-2xl sm:text-3xl font-black">{reservations.length}</div>
             <div className="text-[10px] sm:text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide leading-tight">Σύνολο</div>
           </div>
+          <div className="px-3 sm:px-5 py-3 sm:py-4 rounded-xl border border-gray-200">
+            <div className="text-2xl sm:text-3xl font-black">{customers.length}</div>
+            <div className="text-[10px] sm:text-xs text-gray-400 mt-1 font-medium uppercase tracking-wide leading-tight">Πελάτες</div>
+          </div>
         </div>
 
         {/* Error */}
@@ -240,15 +285,55 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Calendar */}
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 border-b border-gray-100">
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
+              activeTab === 'calendar' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-black'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M1 6h12M5 1v2M9 1v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            Ημερολόγιο
+          </button>
+          <button
+            onClick={() => setActiveTab('customers')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px ${
+              activeTab === 'customers' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-black'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="5" r="3" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M1 13a6 6 0 0112 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            Πελάτες
+            {customers.length > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                {customers.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
         {loading ? (
           <div className="space-y-3">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="h-12 rounded-xl border border-gray-100 bg-gray-50 animate-pulse" />
             ))}
           </div>
-        ) : (
+        ) : activeTab === 'calendar' ? (
           <AdminCalendar reservations={reservations} onDelete={handleDelete} onBook={handleBook} onEdit={handleEdit} />
+        ) : (
+          <CustomersTab
+            customers={customers}
+            reservations={reservations}
+            onDeleteCustomer={handleDeleteCustomer}
+            onToggleNoShow={handleToggleNoShow}
+          />
         )}
       </div>
     </main>

@@ -8,6 +8,15 @@ export type Reservation = {
   start_time: string
   end_time: string
   created_at: string
+  customer_id?: string | null
+  no_show?: boolean
+}
+
+export type Customer = {
+  id: string
+  name: string
+  phone: string
+  created_at: string
 }
 
 let _supabase: SupabaseClient | null = null
