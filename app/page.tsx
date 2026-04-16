@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
+import Image from 'next/image'
 import { supabase, Reservation, ClosedPeriod } from '@/lib/supabase'
 import { toLocalISODate, formatDate } from '@/lib/utils'
 import DatePicker from '@/components/DatePicker'
@@ -71,16 +72,8 @@ export default function Home() {
         <div className="max-w-4xl mx-auto px-6 py-12">
           <div className="flex items-start justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 mb-6">
-                <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full" />
-                </div>
-                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-gray-400">Health Club</span>
-              </div>
-              <h1 className="text-5xl sm:text-6xl font-black tracking-tight leading-none text-black">
-                Physique
-              </h1>
-              <p className="text-gray-400 mt-3 text-base font-light tracking-wide">
+              <Image src="/phc.png" alt="Physique Health Club" width={180} height={80} className="object-contain mb-3" priority />
+              <p className="text-gray-400 text-base font-light tracking-wide">
                 Κράτησε τη θέση σου. Προπονήσου στο καλύτερό σου.
               </p>
             </div>
