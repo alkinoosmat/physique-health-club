@@ -52,6 +52,14 @@ export type CustomerGoal = {
   created_at: string
 }
 
+export type CustomerSchedule = {
+  id: string
+  customer_id: string
+  day_of_week: number  // 1=Mon … 6=Sat
+  slot: string         // e.g. '09:00'
+  created_at: string
+}
+
 let _supabase: SupabaseClient | null = null
 
 export function getSupabase(): SupabaseClient {

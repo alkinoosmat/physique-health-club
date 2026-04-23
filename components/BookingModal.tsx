@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { supabase, Reservation } from '@/lib/supabase'
-import { getEndTime, formatTime, formatDate } from '@/lib/utils'
+import { getEndTime, formatTime, formatDate, isValidPhone, normalizePhone } from '@/lib/utils'
 
 interface BookingModalProps {
   slot: string
@@ -23,6 +23,10 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
     e.preventDefault()
     if (!name.trim() || !phone.trim()) {
       setError('Παρακαλώ συμπλήρωσε όλα τα πεδία.')
+      return
+    }
+    if (!isValidPhone(phone)) {
+      setError('Το τηλέφωνο πρέπει να ξεκινά με 69 και να έχει 10 ψηφία.')
       return
     }
 
@@ -58,7 +62,7 @@ export default function BookingModal({ slot, date, onClose, onSuccess }: Booking
       }
 
       // Find or create customer by phone
-      const normalizedPhone = phone.trim()
+      const normalizedPhone = normalizePhone(phone)
       let customerId: string | null = null
       const { data: existingCustomers } = await supabase
         .from('customers')

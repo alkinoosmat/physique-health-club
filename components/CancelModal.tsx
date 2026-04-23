@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { supabase, Reservation } from '@/lib/supabase'
-import { canCancel, formatTime, formatDate } from '@/lib/utils'
+import { canCancel, formatTime, formatDate, isValidPhone, normalizePhone } from '@/lib/utils'
 
 interface CancelModalProps {
   onClose: () => void
@@ -21,6 +21,10 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
   async function handleLookup(e: React.FormEvent) {
     e.preventDefault()
     if (!phone.trim()) return
+    if (!isValidPhone(phone)) {
+      setError('Το τηλέφωνο πρέπει να ξεκινά με 69 και να έχει 10 ψηφία.')
+      return
+    }
 
     setLoading(true)
     setError('')
@@ -30,7 +34,7 @@ export default function CancelModal({ onClose, onSuccess }: CancelModalProps) {
       const { data, error: fetchError } = await supabase
         .from('reservations')
         .select('*')
-        .eq('phone', phone.trim())
+        .eq('phone', normalizePhone(phone))
         .gte('date', now.toISOString().split('T')[0])
         .order('date', { ascending: true })
         .order('start_time', { ascending: true })

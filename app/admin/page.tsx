@@ -133,9 +133,8 @@ export default function AdminPage() {
       .update(fields)
       .eq('id', id)
 
-    if (!updateError) {
-      setReservations(prev => prev.map(r => r.id === id ? { ...r, ...fields } : r))
-    }
+    if (updateError) throw new Error(updateError.message)
+    setReservations(prev => prev.map(r => r.id === id ? { ...r, ...fields } : r))
   }
 
   async function handleBook(date: string, slot: string, name: string, phone: string): Promise<string | null> {
@@ -365,6 +364,8 @@ export default function AdminPage() {
             onDeleteCustomer={handleDeleteCustomer}
             onToggleNoShow={handleToggleNoShow}
             onUpdateCustomer={handleUpdateCustomer}
+            onBook={handleBook}
+            onRefresh={fetchAll}
           />
         ) : (
           <ClosedPeriodsTab />

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Reservation, Customer } from '@/lib/supabase'
-import { TIME_SLOTS, formatTime, toLocalISODate, formatDate } from '@/lib/utils'
+import { TIME_SLOTS, formatTime, toLocalISODate, formatDate, isValidPhone, normalizePhone } from '@/lib/utils'
 
 const MAX_PER_SLOT = 7
 
@@ -522,10 +522,14 @@ function AdminBookingForm({ slot, customers, onConfirm, onCancel }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { setError('Συμπλήρωσε όνομα.'); return }
+    if (phone.trim() && !isValidPhone(phone)) {
+      setError('Το τηλέφωνο πρέπει να ξεκινά με 69 και να έχει 10 ψηφία.')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const err = await onConfirm(name.trim(), phone.trim() || '-')
+      const err = await onConfirm(name.trim(), phone.trim() ? normalizePhone(phone) : '-')
       if (err) { setError(err); setLoading(false) }
     } catch {
       setError('Σφάλμα. Δοκίμασε ξανά.')
@@ -707,6 +711,10 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { setError('Συμπλήρωσε όνομα.'); return }
+    if (phone.trim() && !isValidPhone(phone)) {
+      setError('Το τηλέφωνο πρέπει να ξεκινά με 69 και να έχει 10 ψηφία.')
+      return
+    }
     setLoading(true)
     setError('')
     const [startHour] = slot.split(':').map(Number)
@@ -714,7 +722,7 @@ function AdminEditForm({ reservation, onConfirm, onCancel }: {
     try {
       await onConfirm({
         name: name.trim(),
-        phone: phone.trim() || '-',
+        phone: phone.trim() ? normalizePhone(phone) : '-',
         date,
         start_time: slot,
         end_time: endTime,

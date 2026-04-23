@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { supabase, Customer, CustomerGoal, CustomerPayment, Reservation } from '@/lib/supabase'
-import { formatDate, formatTime, toLocalISODate } from '@/lib/utils'
+import { supabase, Customer, CustomerGoal, CustomerPayment, CustomerSchedule, Reservation } from '@/lib/supabase'
+import { formatDate, formatTime, toLocalISODate, TIME_SLOTS, isValidPhone, normalizePhone } from '@/lib/utils'
 
 interface CustomersTabProps {
   customers: Customer[]
@@ -10,6 +10,8 @@ interface CustomersTabProps {
   onDeleteCustomer: (id: string) => Promise<void>
   onToggleNoShow: (reservationId: string, value: boolean) => Promise<void>
   onUpdateCustomer: (id: string, fields: Partial<Customer>) => Promise<void>
+  onBook: (date: string, slot: string, name: string, phone: string) => Promise<string | null>
+  onRefresh: () => Promise<void>
 }
 
 const SUBSCRIPTION_OPTIONS = [
@@ -61,7 +63,7 @@ function calcNextPaymentDate(startDate: string, subscription: string): string {
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
-export default function CustomersTab({ customers, reservations, onDeleteCustomer, onToggleNoShow, onUpdateCustomer }: CustomersTabProps) {
+export default function CustomersTab({ customers, reservations, onDeleteCustomer, onToggleNoShow, onUpdateCustomer, onBook, onRefresh }: CustomersTabProps) {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -208,6 +210,8 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
             todayIso={todayIso}
             onToggleNoShow={onToggleNoShow}
             onUpdateCustomer={onUpdateCustomer}
+            onBook={onBook}
+            onRefresh={onRefresh}
           />
         </div>
       ) : (
@@ -227,12 +231,14 @@ export default function CustomersTab({ customers, reservations, onDeleteCustomer
 
 // ─── Customer Detail ──────────────────────────────────────────────────────────
 
-function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUpdateCustomer }: {
+function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUpdateCustomer, onBook, onRefresh }: {
   customer: Customer
   reservations: Reservation[]
   todayIso: string
   onToggleNoShow: (id: string, value: boolean) => Promise<void>
   onUpdateCustomer: (id: string, fields: Partial<Customer>) => Promise<void>
+  onBook: (date: string, slot: string, name: string, phone: string) => Promise<string | null>
+  onRefresh: () => Promise<void>
 }) {
   const future = reservations.filter(r => r.date > todayIso)
   const today = reservations.filter(r => r.date === todayIso)
@@ -244,6 +250,34 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
 
   const effectiveStatus = deriveStatus(customer, todayIso)
   const ps = paymentStatusStyle(effectiveStatus)
+
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [editName, setEditName] = useState(customer.name)
+  const [editPhone, setEditPhone] = useState(customer.phone !== '-' ? customer.phone : '')
+  const [savingInfo, setSavingInfo] = useState(false)
+
+  useEffect(() => {
+    setEditName(customer.name)
+    setEditPhone(customer.phone !== '-' ? customer.phone : '')
+  }, [customer])
+
+  const [phoneError, setPhoneError] = useState('')
+
+  async function handleSaveInfo() {
+    if (!editName.trim()) return
+    if (editPhone.trim() && !isValidPhone(editPhone)) {
+      setPhoneError('Πρέπει να ξεκινά με 69 και να έχει 10 ψηφία.')
+      return
+    }
+    setPhoneError('')
+    setSavingInfo(true)
+    await onUpdateCustomer(customer.id, {
+      name: editName.trim(),
+      phone: editPhone.trim() ? normalizePhone(editPhone) : '-',
+    })
+    setSavingInfo(false)
+    setEditingInfo(false)
+  }
 
   // Sync overdue to DB if status changed
   useEffect(() => {
@@ -259,14 +293,65 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
         <div className="w-12 h-12 rounded-2xl bg-black flex items-center justify-center flex-shrink-0">
           <span className="text-white text-lg font-black">{customer.name.charAt(0).toUpperCase()}</span>
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h2 className="text-xl font-black tracking-tight">{customer.name}</h2>
           <p className="text-sm text-gray-400">{customer.phone !== '-' ? customer.phone : 'Χωρίς τηλέφωνο'}</p>
         </div>
-        {effectiveStatus && (
-          <span className={`ml-auto text-xs font-semibold px-3 py-1.5 rounded-xl border ${ps.bg} ${ps.text}`}>{ps.label}</span>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {effectiveStatus && (
+            <span className={`text-xs font-semibold px-3 py-1.5 rounded-xl border ${ps.bg} ${ps.text}`}>{ps.label}</span>
+          )}
+          <button
+            onClick={() => { setEditingInfo(e => !e) }}
+            className="text-xs text-gray-400 hover:text-black transition-colors font-medium"
+          >
+            {editingInfo ? 'Άκυρο' : 'Επεξεργασία'}
+          </button>
+        </div>
       </div>
+
+      {/* Inline edit form */}
+      {editingInfo && (
+        <div className="rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+            <p className="text-sm font-bold">Επεξεργασία Στοιχείων</p>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">Όνομα</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-black transition-colors"
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveInfo() }}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-gray-400 mb-1">Τηλέφωνο</label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={e => { setEditPhone(e.target.value); setPhoneError('') }}
+                  placeholder="π.χ. 6912345678"
+                  className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none transition-colors placeholder:text-gray-300 ${phoneError ? 'border-red-300 focus:border-red-400' : 'border-gray-200 focus:border-black'}`}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveInfo() }}
+                />
+                {phoneError && <p className="text-[11px] text-red-500 mt-1">{phoneError}</p>}
+              </div>
+            </div>
+            <button
+              onClick={handleSaveInfo}
+              disabled={savingInfo || !editName.trim()}
+              className="w-full py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-white hover:text-black border border-black transition-all disabled:opacity-50"
+            >
+              {savingInfo ? 'Αποθήκευση…' : 'Αποθήκευση'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-2">
@@ -291,6 +376,16 @@ function CustomerDetail({ customer, reservations, todayIso, onToggleNoShow, onUp
 
       {/* Goals */}
       <GoalsSection customerId={customer.id} />
+
+      {/* Weekly Schedule */}
+      <WeeklyScheduleSection
+        customerId={customer.id}
+        customerName={customer.name}
+        customerPhone={customer.phone}
+        reservations={reservations}
+        onBook={onBook}
+        onRefresh={onRefresh}
+      />
 
       {/* Booking History */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
@@ -795,6 +890,199 @@ function GoalRow({ goal, onToggle, onDelete }: {
           <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M3 3.5l.5 8a.5.5 0 00.5.5h6a.5.5 0 00.5-.5l.5-8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
+    </div>
+  )
+}
+
+// ─── Weekly Schedule Section ──────────────────────────────────────────────────
+
+const DAY_NAMES_SHORT = ['', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σαβ']
+const DAY_NAMES_FULL = ['', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο']
+
+// Returns the next upcoming YYYY-MM-DD for a given day-of-week (1=Mon…6=Sat)
+function nextDateForDow(dow: number): string {
+  const today = new Date()
+  const todayDow = today.getDay() === 0 ? 7 : today.getDay()
+  let diff = dow - todayDow
+  if (diff <= 0) diff += 7
+  const d = new Date(today)
+  d.setDate(today.getDate() + diff)
+  // toLocalISODate equivalent inline
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function WeeklyScheduleSection({ customerId, customerName, customerPhone, reservations, onBook, onRefresh }: {
+  customerId: string
+  customerName: string
+  customerPhone: string
+  reservations: Reservation[]
+  onBook: (date: string, slot: string, name: string, phone: string) => Promise<string | null>
+  onRefresh: () => Promise<void>
+}) {
+  const [schedules, setSchedules] = useState<CustomerSchedule[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toggling, setToggling] = useState<string | null>(null) // 'dow-slot'
+  const [conflictMsg, setConflictMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    supabase
+      .from('customer_schedule')
+      .select('*')
+      .eq('customer_id', customerId)
+      .then(({ data }) => {
+        setSchedules((data as CustomerSchedule[]) || [])
+        setLoading(false)
+      })
+  }, [customerId])
+
+  function isActive(dow: number, slot: string) {
+    return schedules.some(s => s.day_of_week === dow && s.slot === slot)
+  }
+
+  async function toggle(dow: number, slot: string) {
+    const key = `${dow}-${slot}`
+    setToggling(key)
+    setConflictMsg(null)
+    const existing = schedules.find(s => s.day_of_week === dow && s.slot === slot)
+
+    if (existing) {
+      // Remove from schedule only — leave existing reservations intact
+      await supabase.from('customer_schedule').delete().eq('id', existing.id)
+      setSchedules(prev => prev.filter(s => s.id !== existing.id))
+    } else {
+      // Add to schedule + immediately book the next occurrence
+      const date = nextDateForDow(dow)
+      const err = await onBook(date, slot, customerName, customerPhone)
+      if (err) {
+        // Conflict — still save the schedule entry, surface the error
+        setConflictMsg(`${DAY_NAMES_FULL[dow]} ${slot}: ${err}`)
+      } else {
+        await onRefresh()
+      }
+      const { data } = await supabase
+        .from('customer_schedule')
+        .insert({ customer_id: customerId, day_of_week: dow, slot })
+        .select()
+        .single()
+      if (data) setSchedules(prev => [...prev, data as CustomerSchedule])
+    }
+    setToggling(null)
+  }
+
+  const sessionCount = schedules.length
+
+  const byDay = [1,2,3,4,5,6].map(dow => ({
+    dow,
+    slots: schedules.filter(s => s.day_of_week === dow).map(s => s.slot).sort(),
+  })).filter(d => d.slots.length > 0)
+
+  return (
+    <div className="rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-bold">Εβδομαδιαίο Πρόγραμμα</p>
+          {sessionCount > 0 && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black text-white">
+              {sessionCount}×/εβδ.
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 py-3 space-y-4">
+        {/* Conflict notice */}
+        {conflictMsg && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="flex-shrink-0 mt-0.5">
+              <path d="M7 1L13 12H1L7 1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+              <path d="M7 5.5v3M7 10h.01" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            <span className="flex-1">{conflictMsg}</span>
+            <button onClick={() => setConflictMsg(null)} className="text-amber-400 hover:text-amber-700 flex-shrink-0">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Summary chips */}
+        {byDay.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {byDay.map(({ dow, slots }) => (
+              <div key={dow} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-gray-200 bg-gray-50">
+                <span className="text-[11px] font-bold text-gray-500">{DAY_NAMES_SHORT[dow]}</span>
+                <div className="flex gap-1">
+                  {slots.map(s => (
+                    <span key={s} className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-black text-white">{s}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Grid */}
+        {loading ? (
+          <div className="h-32 rounded-xl bg-gray-100 animate-pulse" />
+        ) : (
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr>
+                  <th className="text-left px-1 py-1 font-medium text-gray-400 w-14">Ώρα</th>
+                  {[1,2,3,4,5,6].map(dow => (
+                    <th key={dow} className="text-center px-1 py-1 font-semibold text-gray-600 w-10">
+                      {DAY_NAMES_SHORT[dow]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {TIME_SLOTS.map(slot => (
+                  <tr key={slot} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-1 py-0.5 font-mono text-gray-400">{slot}</td>
+                    {[1,2,3,4,5,6].map(dow => {
+                      const active = isActive(dow, slot)
+                      const key = `${dow}-${slot}`
+                      const isLoading = toggling === key
+                      return (
+                        <td key={dow} className="px-1 py-0.5 text-center">
+                          <button
+                            onClick={() => toggle(dow, slot)}
+                            disabled={!!toggling}
+                            title={`${DAY_NAMES_FULL[dow]} ${slot}`}
+                            className={`w-7 h-7 rounded-lg border transition-all disabled:opacity-50 ${
+                              active
+                                ? 'bg-black border-black text-white'
+                                : 'border-gray-200 hover:border-black hover:bg-gray-50'
+                            }`}
+                          >
+                            {isLoading ? (
+                              <span className="text-[8px]">…</span>
+                            ) : active ? (
+                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="mx-auto">
+                                <path d="M1.5 5l2.5 2.5L8.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            ) : null}
+                          </button>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {sessionCount === 0 && !loading && (
+          <p className="text-xs text-gray-300 text-center py-2">
+            Κάνε κλικ στα κελιά για να ορίσεις το εβδομαδιαίο πρόγραμμα του {customerName}.
+          </p>
+        )}
+      </div>
     </div>
   )
 }
